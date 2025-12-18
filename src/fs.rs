@@ -37,14 +37,30 @@ impl FileSystem {
 }
 
 pub(crate) async fn read_problem_by_id(pid: &str) -> Result<String> {
+    read_file_by_id_name(pid, "problem.md").await
+}
+
+pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {
     let fs = FileSystem::get()?;
-    let problem_path = fs.base_path.join(pid).join("problem.md");
-    let content = tokio::fs::read_to_string(&problem_path).await.map_err(|e| {
+    let file_path = get_path_by_id_name(pid, filename).await?;
+    let content = tokio::fs::read_to_string(&file_path).await.map_err(|e| {
         crate::error::AijError::FileSystemError(format!(
-            "Failed to read problem file {}: {}",
-            problem_path.to_string_lossy(),
+            "Failed to read file {}: {}",
+            file_path.to_string_lossy(),
             e
         ))
     })?;
     Ok(content)
+}
+
+pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<PathBuf> {
+    let fs = FileSystem::get()?;
+    let file_path = fs.base_path.join(pid).join(filename);
+    if !file_path.exists() {
+        return Err(crate::error::AijError::FileSystemError(format!(
+            "File does not exist: {}",
+            file_path.to_string_lossy()
+        )));
+    }
+    Ok(file_path)
 }

@@ -16,7 +16,7 @@ mod fs;
 mod server;
 
 use crate::fs::FileSystem;
-use crate::server::get_problem_by_id;
+use crate::server::{get_problem_by_id, judge_problem_by_id};
 use error::Result;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -29,8 +29,8 @@ async fn main() -> Result<()> {
     FileSystem::init(&config.problems_dir)?;
     info!("FileSystem initialized with base path: {}", &config.problems_dir.to_string_lossy());
     let app = Router::new()
-        .route("/judge/problem/{pid}", get(get_problem_by_id));
-    // .route("/judge/submission", post());
+        .route("/judge/problem/{pid}", get(get_problem_by_id))
+        .route("/judge/submission", post(judge_problem_by_id));
     let listen_addr = format!("{}:{}", config.listen_addr, config.listen_port);
     let listener = TcpListener::bind(&listen_addr).await.map_err(
         |e| error::AijError::ServerError(format!("Failed to bind to {}: {}", listen_addr, e))

@@ -1,9 +1,13 @@
 use crate::fs::read_problem_by_id;
+use crate::judger::SupportedLanguages;
+use axum::extract::rejection::JsonRejection;
 use axum::extract::Path;
+use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tracing::info;
 
 #[derive(Serialize)]
@@ -23,24 +27,76 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
     let content = read_problem_by_id(&id).await;
     match content {
         Ok(problem_content) => {
-            let response = ProblemResponse {
-                code: 0,
-                message: "Success".to_string(),
-                data: Some(Problem {
-                    pid: id,
-                    content: problem_content,
-                }),
-            };
-            Json(response).into_response()
+            Json(json!({
+                "code": 0,
+                "message": "Success",
+                "data": {
+                    "pid": id,
+                    "content": problem_content,
+                }
+            })).into_response()
         }
         Err(e) => {
             let status = StatusCode::NOT_FOUND;
-            let response = ProblemResponse {
-                code: -1,
-                message: format!("Error retrieving problem: {}", e),
-                data: None,
-            };
-            (status, Json(response)).into_response()
+            (status, Json(json!({
+                "code": -1,
+                "message": format!("Error retrieving problem: {}", e),
+            }))).into_response()
+        }
+    }
+}
+
+
+#[derive(Deserialize)]
+pub(crate) struct JudgeRequest {
+    #[serde(rename = "submissionId")]
+    pub(crate) submission_id: String,
+    #[serde(rename = "pid")]
+    pub(crate) problem_id: String,
+    #[serde(rename = "code")]
+    pub(crate) code: String,
+    #[serde(rename = "language")]
+    pub(crate) language: SupportedLanguages,
+}
+
+pub(crate) async fn judge_problem_by_id(
+    AppJson(payload): AppJson<JudgeRequest>,
+) -> impl IntoResponse {
+    info!(
+        "Received judge request: submission_id={}, problem_id={}, language={:?}",
+        &payload.submission_id, &payload.problem_id, &payload.language
+    );
+    tokio::spawn(async move {
+        todo!()
+    });
+    let response = json!({
+        "code": 0,
+        "message": "Success",
+    });
+    Json(response)
+}
+
+
+/// Custom extractor for JSON with custom error handling
+pub(crate) struct AppJson<T>(pub T);
+
+impl<S, T> FromRequest<S> for AppJson<T>
+where
+    Json<T>: FromRequest<S, Rejection=JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        match Json::<T>::from_request(req, state).await {
+            Ok(Json(value)) => Ok(Self(value)),
+            Err(rejection) => {
+                let response = json!({
+                    "code": -1,
+                    "message": format!("Invalid JSON: {}", rejection.body_text()),
+                });
+                Err((StatusCode::BAD_REQUEST, Json(response)))
+            }
         }
     }
 }
