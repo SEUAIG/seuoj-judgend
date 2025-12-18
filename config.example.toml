@@ -1,0 +1,5 @@
+listen_addr = "0.0.0.0"
+listen_port = 9090
+max_concurrent_requests = 6
+problems_dir = "/tmp/aij/problems/"
+log_dir = "/tmp/aij/logs/"
