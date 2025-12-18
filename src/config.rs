@@ -6,26 +6,24 @@ use std::path::PathBuf;
 /// Initialize the AIJ configuration by reading from the specified config file
 pub(crate) async fn init_config() -> Result<AijConfig> {
     let cli_config = CliConfig::parse();
-    let config_content =
-        tokio::fs::read_to_string(&cli_config.config_path).await
-            .map_err(|e| {
-                AijError::ConfigError(format!(
-                    "Failed to read config file {}: {}",
-                    cli_config.config_path.display(),
-                    e
-                ))
-            })?;
-    let aij_config: AijConfig =
-        toml::from_str(&config_content).map_err(|e| {
-            AijError::ConfigError(format!(
-                "Failed to parse config file {}: {}",
+    let config_content = tokio::fs::read_to_string(&cli_config.config_path)
+        .await
+        .map_err(|e| {
+            AijError::Config(format!(
+                "Failed to read config file {}: {}",
                 cli_config.config_path.display(),
                 e
             ))
         })?;
+    let aij_config: AijConfig = toml::from_str(&config_content).map_err(|e| {
+        AijError::Config(format!(
+            "Failed to parse config file {}: {}",
+            cli_config.config_path.display(),
+            e
+        ))
+    })?;
     Ok(aij_config)
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Parser)]
 pub(crate) struct CliConfig {
@@ -33,7 +31,6 @@ pub(crate) struct CliConfig {
     #[clap(short, long, default_value = "config.toml")]
     pub(crate) config_path: PathBuf,
 }
-
 
 /// Configuration for the AIJ server
 #[derive(Debug, Clone, Serialize, Deserialize)]

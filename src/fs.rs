@@ -12,7 +12,7 @@ impl FileSystem {
     /// Get the singleton instance of the FileSystem.
     pub(crate) fn get() -> Result<&'static Self> {
         INSTANCE.get().ok_or_else(|| {
-            crate::error::AijError::FileSystemError("FileSystem is not initialized".to_string())
+            crate::error::AijError::FileSystem("FileSystem is not initialized".to_string())
         })
     }
 
@@ -20,7 +20,7 @@ impl FileSystem {
     pub(crate) fn init(base_path: impl AsRef<Path>) -> Result<()> {
         // Create the path if it doesn't exist
         std::fs::create_dir_all(base_path.as_ref()).map_err(|e| {
-            crate::error::AijError::FileSystemError(format!(
+            crate::error::AijError::FileSystem(format!(
                 "Failed to create base path {}: {}",
                 base_path.as_ref().to_string_lossy(),
                 e
@@ -30,9 +30,9 @@ impl FileSystem {
         let fs = FileSystem {
             base_path: base_path.as_ref().to_path_buf(),
         };
-        INSTANCE
-            .set(fs)
-            .map_err(|_| crate::error::AijError::FileSystemError("FileSystem already initialized".to_string()))
+        INSTANCE.set(fs).map_err(|_| {
+            crate::error::AijError::FileSystem("FileSystem already initialized".to_string())
+        })
     }
 }
 
@@ -41,10 +41,9 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<String> {
 }
 
 pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {
-    let fs = FileSystem::get()?;
     let file_path = get_path_by_id_name(pid, filename).await?;
     let content = tokio::fs::read_to_string(&file_path).await.map_err(|e| {
-        crate::error::AijError::FileSystemError(format!(
+        crate::error::AijError::FileSystem(format!(
             "Failed to read file {}: {}",
             file_path.to_string_lossy(),
             e
@@ -57,10 +56,25 @@ pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<Pat
     let fs = FileSystem::get()?;
     let file_path = fs.base_path.join(pid).join(filename);
     if !file_path.exists() {
-        return Err(crate::error::AijError::FileSystemError(format!(
+        return Err(crate::error::AijError::FileSystem(format!(
             "File does not exist: {}",
             file_path.to_string_lossy()
         )));
     }
     Ok(file_path)
+}
+
+pub(crate) async fn get_dir_by_submission_id(submission_id: &str) -> Result<PathBuf> {
+    let fs = FileSystem::get()?;
+    let dir_path = fs.base_path.join("submissions").join(submission_id);
+    if !dir_path.exists() {
+        tokio::fs::create_dir_all(&dir_path).await.map_err(|e| {
+            crate::error::AijError::FileSystem(format!(
+                "Failed to create directories for {}: {}",
+                dir_path.to_string_lossy(),
+                e
+            ))
+        })?;
+    }
+    Ok(dir_path)
 }

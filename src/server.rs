@@ -1,51 +1,42 @@
 use crate::fs::read_problem_by_id;
-use crate::judger::SupportedLanguages;
-use axum::extract::rejection::JsonRejection;
+use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use axum::Json;
 use axum::extract::Path;
+use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
-use serde::{Deserialize, Serialize};
+use reqwest::Client;
+use serde::Deserialize;
 use serde_json::json;
-use tracing::info;
+use tracing::{info, warn};
 
-#[derive(Serialize)]
-struct Problem {
-    pid: String,
-    content: String,
-}
-
-#[derive(Serialize)]
-struct ProblemResponse {
-    code: i32,
-    message: String,
-    data: Option<Problem>,
-}
 pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoResponse {
     info!("Received request for problem ID: {}", id);
     let content = read_problem_by_id(&id).await;
     match content {
-        Ok(problem_content) => {
-            Json(json!({
-                "code": 0,
-                "message": "Success",
-                "data": {
-                    "pid": id,
-                    "content": problem_content,
-                }
-            })).into_response()
-        }
+        Ok(problem_content) => Json(json!({
+            "code": 0,
+            "message": "Success",
+            "data": {
+                "pid": id,
+                "content": problem_content,
+            }
+        }))
+        .into_response(),
         Err(e) => {
             let status = StatusCode::NOT_FOUND;
-            (status, Json(json!({
-                "code": -1,
-                "message": format!("Error retrieving problem: {}", e),
-            }))).into_response()
+            (
+                status,
+                Json(json!({
+                    "code": -1,
+                    "message": format!("Error retrieving problem: {}", e),
+                })),
+            )
+                .into_response()
         }
     }
 }
-
 
 #[derive(Deserialize)]
 pub(crate) struct JudgeRequest {
@@ -67,7 +58,63 @@ pub(crate) async fn judge_problem_by_id(
         &payload.submission_id, &payload.problem_id, &payload.language
     );
     tokio::spawn(async move {
-        todo!()
+        let res = judge(
+            payload.problem_id,
+            payload.code,
+            payload.language,
+            payload.submission_id.clone(),
+        )
+        .await;
+        // todo: 需要全局配置单例
+        let backend_base_addr = "http://127.0.0.1:4523/m1/7556929-7294366-default";
+
+        let server_addr = format!(
+            "{}/judge/submission/{}",
+            backend_base_addr, &payload.submission_id
+        );
+        let (status, detail) = match res {
+            Ok(result) => {
+                info!("Judging completed: {:?}", result);
+                match result {
+                    JudgeResult::Accepted => ("Accepted", "".to_string()),
+                    JudgeResult::WrongAnswer(s) => ("WrongAnswer", s),
+                    JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", "".to_string()),
+                    JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", "".to_string()),
+                    JudgeResult::RuntimeError => ("RuntimeError", "".to_string()),
+                    JudgeResult::ComplieError(s) => ("ComplieError", s),
+                    JudgeResult::SystemError => ("SystemError", "".to_string()),
+                }
+            }
+            Err(e) => {
+                info!("Error during judging: {}", e);
+                ("JudgendError", format!("Error during judging: {}", e))
+            }
+        };
+        let client = Client::new();
+        match client
+            .put(&server_addr)
+            .json(&json!({
+                "status": status,
+                "detail": detail,
+                "submissionNo": payload.submission_id,
+            }))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                info!(
+                    "Reported result to backend for submission_id={}: response_status={}",
+                    &payload.submission_id,
+                    resp.status()
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to report result to backend for submission_id={}: {}",
+                    &payload.submission_id, e
+                );
+            }
+        }
     });
     let response = json!({
         "code": 0,
@@ -76,13 +123,12 @@ pub(crate) async fn judge_problem_by_id(
     Json(response)
 }
 
-
 /// Custom extractor for JSON with custom error handling
 pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection=JsonRejection>,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);

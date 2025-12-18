@@ -1,7 +1,7 @@
 use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub(crate) fn init_logger(log_dir: impl AsRef<Path>) -> WorkerGuard {
     // 1. 定义日志文件路径和滚动策略（按天滚动，前缀为 judger.log）
@@ -12,8 +12,7 @@ pub(crate) fn init_logger(log_dir: impl AsRef<Path>) -> WorkerGuard {
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // 3. 配置日志级别过滤器（优先从环境变量 RUST_LOG 读取，默认使用 info）
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // 4. 组装订阅者并初始化
     tracing_subscriber::registry()
@@ -24,7 +23,7 @@ pub(crate) fn init_logger(log_dir: impl AsRef<Path>) -> WorkerGuard {
         .with(
             fmt::layer()
                 .with_ansi(false) // 文件中不需要彩色字符
-                .with_writer(non_blocking)
+                .with_writer(non_blocking),
         )
         .init();
     guard
