@@ -78,3 +78,17 @@ pub(crate) async fn get_dir_by_submission_id(submission_id: &str) -> Result<Path
     }
     Ok(dir_path)
 }
+
+pub(crate) async fn delete_dir_by_submission_id(submission_id: &str) -> Result<()> {
+    let dir_path = get_dir_by_submission_id(submission_id).await?;
+    if dir_path.exists() {
+        tokio::fs::remove_dir_all(&dir_path).await.map_err(|e| {
+            crate::error::AijError::FileSystem(format!(
+                "Failed to remove directory {}: {}",
+                dir_path.to_string_lossy(),
+                e
+            ))
+        })?;
+    }
+    Ok(())
+}

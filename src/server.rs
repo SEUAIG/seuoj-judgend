@@ -1,4 +1,5 @@
-use crate::fs::read_problem_by_id;
+use crate::config::AijConfig;
+use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
 use crate::judger::{judge, JudgeResult, SupportedLanguages};
 use axum::extract::rejection::JsonRejection;
 use axum::extract::Path;
@@ -9,7 +10,7 @@ use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoResponse {
     info!("Received request for problem ID: {}", id);
@@ -65,13 +66,30 @@ pub(crate) async fn judge_problem_by_id(
             payload.submission_id.clone(),
         )
             .await;
-        // todo: 需要全局配置单例
-        let backend_base_addr = "http://127.0.0.1:4523/m1/7556929-7294366-default";
-
-        let server_addr = format!(
-            "{}/judge/submission/{}",
-            backend_base_addr, &payload.submission_id
-        );
+        match AijConfig::get().await {
+            Ok(config) => {
+                if !config.save_submissions {
+                    if let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await {
+                        warn!(
+                            "Failed to delete submission files for submission_id={}: {}",
+                            &payload.submission_id, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get config for logging: {}", e);
+            }
+        }
+        let server_addr = match AijConfig::get_backend_base_addr().await {
+            Ok(addr) => {
+                format!("{}/judge/submission/{}", addr, &payload.submission_id)
+            }
+            Err(e) => {
+                error!("Failed to get backend base address for reporting: {}", e);
+                return;
+            }
+        };
         let (status, detail) = match res {
             Ok(result) => {
                 info!("Judging completed: {:?}", result);
@@ -86,7 +104,7 @@ pub(crate) async fn judge_problem_by_id(
                 }
             }
             Err(e) => {
-                info!("Error during judging: {}", e);
+                warn!("Error during judging: {}", e);
                 ("JudgendError", format!("Error during judging: {}", e))
             }
         };
