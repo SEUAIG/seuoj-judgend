@@ -37,12 +37,12 @@ pub(crate) struct ProblemInfo {
     /// Number of test cases
     pub(crate) test_case_number: i32,
     /// type of the problem
-    pub(crate) problem_type: ProbemType,
+    pub(crate) problem_type: ProblemType,
 }
 
 /// Type of the problem
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum ProbemType {
+pub(crate) enum ProblemType {
     /// Standard IO problem
     Standard,
     /// Interactive problem
@@ -152,10 +152,10 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::ComplieError(stderr.to_string()));
+                return Ok(JudgeResult::CompileError(stderr.to_string()));
             }
             (exec_path, vec![])
         }
@@ -194,8 +194,8 @@ pub(crate) async fn judge(
             .to_string_lossy()
             .to_string();
         let interactor = match &problem_info.problem_type {
-            ProbemType::Standard => None,
-            ProbemType::Interactive => Some({
+            ProblemType::Standard => None,
+            ProblemType::Interactive => Some({
                 let path = get_path_by_id_name(&pid, "interactor").await?;
                 if !path.exists() {
                     return Err(AijError::FileSystem(format!(
@@ -249,7 +249,7 @@ pub(crate) enum JudgeResult {
     TimeLimitExceeded,
     MemoryLimitExceeded,
     RuntimeError,
-    ComplieError(String),
+    CompileError(String),
     SystemError,
 }
 
@@ -266,6 +266,6 @@ mod tests {
         assert!(info.is_ok());
         let info = info.unwrap();
         assert_eq!(info.test_case_number, 1);
-        assert_eq!(info.problem_type, ProbemType::Standard);
+        assert_eq!(info.problem_type, ProblemType::Standard);
     }
 }

@@ -1,11 +1,11 @@
 use crate::fs::read_problem_by_id;
-use crate::judger::{JudgeResult, SupportedLanguages, judge};
-use axum::Json;
-use axum::extract::Path;
+use crate::judger::{judge, JudgeResult, SupportedLanguages};
 use axum::extract::rejection::JsonRejection;
+use axum::extract::Path;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -23,7 +23,7 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
                 "content": problem_content,
             }
         }))
-        .into_response(),
+            .into_response(),
         Err(e) => {
             let status = StatusCode::NOT_FOUND;
             (
@@ -64,7 +64,7 @@ pub(crate) async fn judge_problem_by_id(
             payload.language,
             payload.submission_id.clone(),
         )
-        .await;
+            .await;
         // todo: 需要全局配置单例
         let backend_base_addr = "http://127.0.0.1:4523/m1/7556929-7294366-default";
 
@@ -81,7 +81,7 @@ pub(crate) async fn judge_problem_by_id(
                     JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", "".to_string()),
                     JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", "".to_string()),
                     JudgeResult::RuntimeError => ("RuntimeError", "".to_string()),
-                    JudgeResult::ComplieError(s) => ("ComplieError", s),
+                    JudgeResult::CompileError(s) => ("CompileError", s),
                     JudgeResult::SystemError => ("SystemError", "".to_string()),
                 }
             }
@@ -128,7 +128,7 @@ pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    Json<T>: FromRequest<S, Rejection=JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);
