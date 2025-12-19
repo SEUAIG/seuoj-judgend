@@ -91,7 +91,7 @@ pub(crate) async fn judge(
     language: SupportedLanguages,
     submission_id: String,
 ) -> Result<JudgeResult> {
-    let problem_info = ProblemInfo::from_pid(&pid).await?;
+    let mut problem_info = ProblemInfo::from_pid(&pid).await?;
     let tmp_dir = get_dir_by_submission_id(&submission_id).await?;
     let source_file_extension = match language {
         SupportedLanguages::C => "c",
@@ -117,7 +117,7 @@ pub(crate) async fn judge(
                 e
             ))
         })?;
-    let (exec_path, args) = match language {
+    let (exec_path, args, seccomp_rule) = match language {
         SupportedLanguages::C
         | SupportedLanguages::Cpp
         | SupportedLanguages::Cpp11
@@ -157,23 +157,61 @@ pub(crate) async fn judge(
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
             }
-            (exec_path, vec![])
+            (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
-        SupportedLanguages::Python3_12 => (
-            "/usr/bin/python3".to_string(),
-            vec![
+        SupportedLanguages::Python3_12 => {
+            problem_info.max_real_time_ms = match problem_info.max_real_time_ms {
+                Some(-1) => Some(-1),
+                Some(m) => Some(m * 2),
+                None => None,
+            };
+            problem_info.max_cpu_time_ms = match problem_info.max_cpu_time_ms {
+                Some(-1) => Some(-1),
+                Some(m) => Some(m * 2),
+                None => None,
+            };
+            (
                 "/usr/bin/python3".to_string(),
+                vec![
+                    "/usr/bin/python3".to_string(),
+                    source_file_path.to_string_lossy().to_string(),
+                ],
+                judger::SeccompRuleName::Python,
+            )
+        }
+        SupportedLanguages::Nodejs22 => (
+            "/usr/bin/node".to_string(),
+            vec![
+                "/usr/bin/node".to_string(),
                 source_file_path.to_string_lossy().to_string(),
             ],
+            judger::SeccompRuleName::Node
         ),
-        SupportedLanguages::Nodejs22 | SupportedLanguages::Go1_22 | SupportedLanguages::Java17 => {
+        SupportedLanguages::Go1_22 => {
+            let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
+            let compile_output = tokio::process::Command::new("go")
+                .arg("build")
+                .arg("-o")
+                .arg(&exec_path)
+                .arg(&source_file_path)
+                .output()
+                .await
+                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            if !compile_output.status.success() {
+                let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                return Ok(JudgeResult::CompileError(stderr.to_string()));
+            }
+            (exec_path, vec![], judger::SeccompRuleName::Golang)
+        }
+        SupportedLanguages::Java17 => {
             return Err(AijError::Judge(format!(
                 "Language {:?} not yet supported",
                 language
             )));
         }
     };
-    let config = problem_info.to_judger_config();
+    let mut config = problem_info.to_judger_config();
+    config.seccomp_rule_name = Some(seccomp_rule);
     for i in 1..=problem_info.test_case_number {
         let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
         let ans_path = get_path_by_id_name(&pid, &format!("{}.ans", i)).await?;
@@ -217,10 +255,16 @@ pub(crate) async fn judge(
                 return Ok(JudgeResult::MemoryLimitExceeded);
             }
             judger::ErrorCode::RuntimeError => {
-                return Ok(JudgeResult::RuntimeError);
+                return Ok(JudgeResult::RuntimeError(format!(
+                    "Runtime error on test case {} result: {:?}",
+                    i, res
+                )));
             }
             judger::ErrorCode::SystemError => {
-                return Ok(JudgeResult::SystemError);
+                return Ok(JudgeResult::SystemError(format!(
+                    "System error on test case {} result: {:?}",
+                    i, res
+                )));
             }
             _ => {
                 return Err(AijError::Judge(format!(
@@ -248,9 +292,9 @@ pub(crate) enum JudgeResult {
     WrongAnswer(String),
     TimeLimitExceeded,
     MemoryLimitExceeded,
-    RuntimeError,
+    RuntimeError(String),
     CompileError(String),
-    SystemError,
+    SystemError(String),
 }
 
 #[cfg(test)]

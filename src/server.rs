@@ -64,8 +64,7 @@ pub(crate) async fn judge_problem_by_id(
             payload.code,
             payload.language,
             payload.submission_id.clone(),
-        )
-            .await;
+        ).await;
         match AijConfig::get().await {
             Ok(config) => {
                 if !config.save_submissions {
@@ -98,9 +97,9 @@ pub(crate) async fn judge_problem_by_id(
                     JudgeResult::WrongAnswer(s) => ("WrongAnswer", s),
                     JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", "".to_string()),
                     JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", "".to_string()),
-                    JudgeResult::RuntimeError => ("RuntimeError", "".to_string()),
+                    JudgeResult::RuntimeError(s) => ("RuntimeError", s),
                     JudgeResult::CompileError(s) => ("CompileError", s),
-                    JudgeResult::SystemError => ("SystemError", "".to_string()),
+                    JudgeResult::SystemError(s) => ("SystemError", s),
                 }
             }
             Err(e) => {
