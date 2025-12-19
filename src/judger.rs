@@ -152,7 +152,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -185,7 +185,7 @@ pub(crate) async fn judge(
                 "/usr/bin/node".to_string(),
                 source_file_path.to_string_lossy().to_string(),
             ],
-            judger::SeccompRuleName::Node
+            judger::SeccompRuleName::Node,
         ),
         SupportedLanguages::Go1_22 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
@@ -273,12 +273,9 @@ pub(crate) async fn judge(
                 )));
             }
         }
-        let compare_result = comparer::standard_comparer(&config.output_path, &ans_path).await?;
-        if !compare_result {
-            return Ok(JudgeResult::WrongAnswer(format!(
-                "Wrong answer on test case {}",
-                i
-            )));
+        let (res, detail) = comparer::standard_comparer(&config.output_path, &ans_path).await?;
+        if !res {
+            return Ok(JudgeResult::WrongAnswer(vec![(i as usize, detail)]));
         }
     }
     // Placeholder for the judging logic
@@ -289,7 +286,7 @@ pub(crate) async fn judge(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
     Accepted,
-    WrongAnswer(String),
+    WrongAnswer(Vec<(usize, String)>),
     TimeLimitExceeded,
     MemoryLimitExceeded,
     RuntimeError(String),

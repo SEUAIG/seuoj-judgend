@@ -1,12 +1,12 @@
 use crate::config::AijConfig;
 use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
-use crate::judger::{judge, JudgeResult, SupportedLanguages};
-use axum::extract::rejection::JsonRejection;
+use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use axum::Json;
 use axum::extract::Path;
+use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -24,7 +24,7 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
                 "content": problem_content,
             }
         }))
-            .into_response(),
+        .into_response(),
         Err(e) => {
             let status = StatusCode::NOT_FOUND;
             (
@@ -64,16 +64,17 @@ pub(crate) async fn judge_problem_by_id(
             payload.code,
             payload.language,
             payload.submission_id.clone(),
-        ).await;
+        )
+        .await;
         match AijConfig::get().await {
             Ok(config) => {
-                if !config.save_submissions {
-                    if let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await {
-                        warn!(
-                            "Failed to delete submission files for submission_id={}: {}",
-                            &payload.submission_id, e
-                        );
-                    }
+                if !config.save_submissions
+                    && let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await
+                {
+                    warn!(
+                        "Failed to delete submission files for submission_id={}: {}",
+                        &payload.submission_id, e
+                    );
                 }
             }
             Err(e) => {
@@ -93,18 +94,50 @@ pub(crate) async fn judge_problem_by_id(
             Ok(result) => {
                 info!("Judging completed: {:?}", result);
                 match result {
-                    JudgeResult::Accepted => ("Accepted", "".to_string()),
-                    JudgeResult::WrongAnswer(s) => ("WrongAnswer", s),
-                    JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", "".to_string()),
-                    JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", "".to_string()),
-                    JudgeResult::RuntimeError(s) => ("RuntimeError", s),
-                    JudgeResult::CompileError(s) => ("CompileError", s),
-                    JudgeResult::SystemError(s) => ("SystemError", s),
+                    JudgeResult::Accepted => ("Accepted", json!("")),
+                    JudgeResult::WrongAnswer(vec) => (
+                        "WrongAnswer",
+                        json!(
+                            vec.iter()
+                                .map(|(cnt, s)| {
+                                    json!({
+                                        "cnt": cnt,
+                                        "message": s
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                        ),
+                    ),
+                    JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", json!("")),
+                    JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", json!("")),
+                    JudgeResult::RuntimeError(s) => (
+                        "RuntimeError",
+                        json!({
+                            "message": s
+                        }),
+                    ),
+                    JudgeResult::CompileError(s) => (
+                        "CompileError",
+                        json!({
+                            "message": s
+                        }),
+                    ),
+                    JudgeResult::SystemError(s) => (
+                        "SystemError",
+                        json!({
+                            "message": s
+                        }),
+                    ),
                 }
             }
             Err(e) => {
                 warn!("Error during judging: {}", e);
-                ("JudgendError", format!("Error during judging: {}", e))
+                (
+                    "JudgendError",
+                    json!({
+                        "message": format!("System error during judging: {}", e)
+                    }),
+                )
             }
         };
         let client = Client::new();
@@ -145,7 +178,7 @@ pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection=JsonRejection>,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);

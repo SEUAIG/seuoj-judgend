@@ -24,9 +24,9 @@ pub(crate) async fn init_config() -> Result<&'static AijConfig> {
             e
         ))
     })?;
-    CONFIG.set(aij_config).map_err(
-        |_| AijError::Config("Configuration already initialized".to_string()),
-    )?;
+    CONFIG
+        .set(aij_config)
+        .map_err(|_| AijError::Config("Configuration already initialized".to_string()))?;
     AijConfig::get().await
 }
 
@@ -63,9 +63,9 @@ pub(crate) struct AijConfig {
 impl AijConfig {
     /// get global config, initialized by [init_config]
     pub(crate) async fn get() -> Result<&'static AijConfig> {
-        CONFIG.get().ok_or_else(|| {
-            AijError::Config("Configuration is not initialized".to_string())
-        })
+        CONFIG
+            .get()
+            .ok_or_else(|| AijError::Config("Configuration is not initialized".to_string()))
     }
 
     pub(crate) async fn get_backend_base_addr() -> Result<String> {
