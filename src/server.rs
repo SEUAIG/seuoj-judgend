@@ -1,15 +1,17 @@
 use crate::config::AijConfig;
 use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
-use crate::judger::{JudgeResult, SupportedLanguages, judge};
-use axum::Json;
-use axum::extract::Path;
+use crate::judger::{judge, JudgeResult, SupportedLanguages};
 use axum::extract::rejection::JsonRejection;
+use axum::extract::Path;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
+use std::sync::OnceLock;
+use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
 
 pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoResponse {
@@ -24,7 +26,7 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
                 "content": problem_content,
             }
         }))
-        .into_response(),
+            .into_response(),
         Err(e) => {
             let status = StatusCode::NOT_FOUND;
             (
@@ -59,13 +61,15 @@ pub(crate) async fn judge_problem_by_id(
         &payload.submission_id, &payload.problem_id, &payload.language
     );
     tokio::spawn(async move {
+        let semaphore = get_judge_semaphore().await;
+        let sem = semaphore.acquire().await;
         let res = judge(
             payload.problem_id,
             payload.code,
             payload.language,
             payload.submission_id.clone(),
-        )
-        .await;
+        ).await;
+        drop(sem);
         match AijConfig::get().await {
             Ok(config) => {
                 if !config.save_submissions
@@ -178,7 +182,7 @@ pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    Json<T>: FromRequest<S, Rejection=JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);
@@ -195,4 +199,19 @@ where
             }
         }
     }
+}
+
+
+static JUDGE_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
+
+pub(crate) async fn get_judge_semaphore() -> &'static Semaphore {
+    if JUDGE_SEMAPHORE.get().is_none() {
+        let max_concurrent = match AijConfig::get().await {
+            Ok(config) => config.max_concurrent_requests,
+            Err(_) => 6,
+        };
+        let _ = JUDGE_SEMAPHORE.set(Semaphore::new(max_concurrent));
+    }
+    #[allow(clippy::unwrap_used)]
+    JUDGE_SEMAPHORE.get().unwrap()
 }

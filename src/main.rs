@@ -6,8 +6,8 @@
 
 use crate::config::init_config;
 use crate::logger::init_logger;
-use axum::Router;
 use axum::routing::{get, post};
+use axum::Router;
 mod config;
 mod error;
 mod fs;
@@ -20,7 +20,6 @@ use crate::server::{get_problem_by_id, judge_problem_by_id};
 use error::Result;
 use tokio::net::TcpListener;
 use tokio::signal;
-use tower::limit::ConcurrencyLimitLayer;
 use tracing::info;
 
 #[tokio::main]
@@ -34,8 +33,7 @@ async fn main() -> Result<()> {
     );
     let app = Router::new()
         .route("/judge/problem/{pid}", get(get_problem_by_id))
-        .route("/judge/submission", post(judge_problem_by_id))
-        .layer(ConcurrencyLimitLayer::new(config.max_concurrent_requests));
+        .route("/judge/submission", post(judge_problem_by_id));
     let listen_addr = format!("{}:{}", config.listen_addr, config.listen_port);
     let listener = TcpListener::bind(&listen_addr).await.map_err(|e| {
         error::AijError::Server(format!("Failed to bind to {}: {}", listen_addr, e))
