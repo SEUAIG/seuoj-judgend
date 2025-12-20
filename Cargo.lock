@@ -717,9 +717,9 @@ dependencies = [
 
 [[package]]
 name = "judger"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4c2be40ab24c33a407a0b63f7183ba22224206696849bc2b9361e0e4be1adf"
+checksum = "609280cdff5d392e0fc6f121c0256f9ac900322f1540baba56f9c82aaf1ae296"
 dependencies = [
  "clap",
  "libseccomp",
