@@ -1,4 +1,6 @@
 use crate::error::Result;
+use crate::judger::ProblemInfo;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::io::AsyncReadExt;
@@ -38,8 +40,53 @@ impl FileSystem {
     }
 }
 
-pub(crate) async fn read_problem_by_id(pid: &str) -> Result<String> {
-    read_file_by_id_name(pid, "problem.md").await
+/// Sample input/output pair for a problem.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Sample {
+    pub(crate) r#in: String,
+    pub(crate) ans: String,
+    pub(crate) description: String,
+}
+
+/// Problem metadata and description.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Problem {
+    pub(crate) pid: String,
+    pub(crate) description: String,
+    pub(crate) input: String,
+    pub(crate) output: String,
+    pub(crate) example: Vec<Sample>,
+    #[serde(rename = "timeLimit")]
+    pub(crate) time_limit: i32,
+    #[serde(rename = "memLimit")]
+    pub(crate) mem_limit: i64,
+    pub(crate) r#type: String,
+}
+
+pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
+    let problem_info = ProblemInfo::from_pid(pid).await?;
+    let mut example = vec![];
+    for i in 1..=problem_info.test_case_number {
+        let r#in = read_file_by_id_name(pid, &format!("example_{}.in", i)).await?;
+        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", i)).await?;
+        let description = read_file_by_id_name(pid, &format!("example_{}.md", i)).await?;
+        example.push(Sample {
+            r#in,
+            ans,
+            description,
+        });
+    }
+    let config = problem_info.to_judger_config();
+    Ok(Problem {
+        pid: pid.to_string(),
+        description: read_file_by_id_name(pid, "description.md").await?,
+        input: read_file_by_id_name(pid, "input.md").await?,
+        output: read_file_by_id_name(pid, "output.md").await?,
+        example,
+        time_limit: config.max_cpu_time,
+        mem_limit: config.max_memory,
+        r#type: problem_info.problem_type.to_string(),
+    })
 }
 
 pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {

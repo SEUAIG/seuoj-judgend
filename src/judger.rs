@@ -3,6 +3,7 @@ use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 use judger::Config;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use tracing::{info, warn};
 
 mod comparer;
@@ -49,6 +50,15 @@ pub(crate) enum ProblemType {
     Standard,
     /// Interactive problem
     Interactive,
+}
+
+impl Display for ProblemType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProblemType::Standard => write!(f, "Standard"),
+            ProblemType::Interactive => write!(f, "Interactive"),
+        }
+    }
 }
 
 impl ProblemInfo {
@@ -259,14 +269,17 @@ pub(crate) async fn judge(
         let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
         let (sys, r#type) = match res.result {
             judger::ErrorCode::Success => {
-                let (res, detail) =
-                    comparer::standard_comparer(&config.output_path, &ans_path).await?;
-                if !res {
-                    (detail, "WrongAnswer")
-                } else {
-                    ("Accepted".to_string(), "Accepted")
+                let mut result = ("Accepted".to_string(), "Accepted");
+                if problem_info.problem_type != ProblemType::Interactive {
+                    let (res, detail) =
+                        comparer::standard_comparer(&config.output_path, &ans_path).await?;
+                    if !res {
+                        result = (detail, "WrongAnswer")
+                    }
                 }
+                result
             }
+            judger::ErrorCode::WrongAnswer(s) => (s, "WrongAnswer"),
             judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
                 ("Time Limit Exceeded".to_string(), "TimeLimitExceeded")
             }
