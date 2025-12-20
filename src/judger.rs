@@ -3,6 +3,7 @@ use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 use judger::Config;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use tracing::{info, warn};
 
 mod comparer;
@@ -49,6 +50,15 @@ pub(crate) enum ProblemType {
     Standard,
     /// Interactive problem
     Interactive,
+}
+
+impl Display for ProblemType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProblemType::Standard => write!(f, "Standard"),
+            ProblemType::Interactive => write!(f, "Interactive"),
+        }
+    }
 }
 
 impl ProblemInfo {
