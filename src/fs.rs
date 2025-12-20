@@ -57,7 +57,7 @@ pub(crate) struct Problem {
     pub(crate) output: String,
     pub(crate) example: Vec<Sample>,
     #[serde(rename = "timeLimit")]
-    pub(crate) time_imit: i32,
+    pub(crate) time_limit: i32,
     #[serde(rename = "memLimit")]
     pub(crate) mem_limit: i64,
     pub(crate) r#type: String,
@@ -83,7 +83,7 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
         input: read_file_by_id_name(pid, "input.md").await?,
         output: read_file_by_id_name(pid, "output.md").await?,
         example,
-        time_imit: config.max_cpu_time,
+        time_limit: config.max_cpu_time,
         mem_limit: config.max_memory,
         r#type: problem_info.problem_type.to_string(),
     })
