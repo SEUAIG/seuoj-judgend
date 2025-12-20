@@ -1,3 +1,4 @@
+//! Judger module for handling code submission judging.
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
@@ -313,7 +314,7 @@ pub(crate) async fn judge(
             r#type: r#type.to_string(),
         });
     }
-    Ok(JudgeResult::OtherError(out_vec))
+    Ok(JudgeResult::MaybeError(out_vec))
 }
 
 /// Result of once judging
@@ -341,7 +342,7 @@ pub(crate) struct JudgeResultItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
     CompileError(String),
-    OtherError(Vec<JudgeResultItem>),
+    MaybeError(Vec<JudgeResultItem>),
 }
 
 #[cfg(test)]
@@ -351,7 +352,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_problem_info_from_pid() {
-        FileSystem::init("/tmp/aij/problems").unwrap();
+        FileSystem::init("./assets/problems").unwrap();
         let pid = "1";
         let info = ProblemInfo::from_pid(pid).await;
         assert!(info.is_ok());

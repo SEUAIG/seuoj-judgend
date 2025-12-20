@@ -1,3 +1,4 @@
+//! File system operations for reading and writing problem and submission data.
 use crate::error::Result;
 use crate::judger::ProblemInfo;
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use tokio::io::AsyncReadExt;
 static INSTANCE: OnceLock<FileSystem> = OnceLock::new();
 
 /// Read and write files to the local filesystem.
-pub(crate) struct FileSystem {
+pub struct FileSystem {
     base_path: PathBuf,
 }
 
@@ -21,7 +22,7 @@ impl FileSystem {
     }
 
     /// Initialize the FileSystem with the given base path.
-    pub(crate) fn init(base_path: impl AsRef<Path>) -> Result<()> {
+    pub fn init(base_path: impl AsRef<Path>) -> Result<()> {
         // Create the path if it doesn't exist
         std::fs::create_dir_all(base_path.as_ref()).map_err(|e| {
             crate::error::AijError::FileSystem(format!(

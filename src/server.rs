@@ -1,3 +1,4 @@
+//! Server-related functionalities for the AI Judge system.
 use crate::config::AijConfig;
 use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
 use crate::judger::{JudgeResult, SupportedLanguages, judge};
@@ -98,7 +99,7 @@ pub(crate) async fn judge_problem_by_id(
                         "errorDetail": s,
                         "submissionNo": payload.submission_id,
                     }),
-                    JudgeResult::OtherError(vec) => json!({
+                    JudgeResult::MaybeError(vec) => json!({
                         "status": vec[0].r#type,
                         "resultDetail": vec,
                         "submissionNo": payload.submission_id,
