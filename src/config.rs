@@ -58,6 +58,9 @@ pub(crate) struct AijConfig {
     pub(crate) backend_prefix: String,
     /// Save submission files
     pub(crate) save_submissions: bool,
+    /// Truncate length of long outputs
+    #[serde(default = "default_output_truncate_length")]
+    pub(crate) output_truncate_length: usize,
 }
 
 impl AijConfig {
@@ -75,4 +78,8 @@ impl AijConfig {
             config.backend_host, config.backend_port, config.backend_prefix
         ))
     }
+}
+
+fn default_output_truncate_length() -> usize {
+    200
 }

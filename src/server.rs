@@ -68,7 +68,8 @@ pub(crate) async fn judge_problem_by_id(
             payload.code,
             payload.language,
             payload.submission_id.clone(),
-        ).await;
+        )
+            .await;
         drop(sem);
         match AijConfig::get().await {
             Ok(config) => {
@@ -94,67 +95,35 @@ pub(crate) async fn judge_problem_by_id(
                 return;
             }
         };
-        let (status, detail) = match res {
+        let json_content = match res {
             Ok(result) => {
                 info!("Judging completed: {:?}", result);
                 match result {
-                    JudgeResult::Accepted => ("Accepted", json!("")),
-                    JudgeResult::WrongAnswer(vec) => (
-                        "WrongAnswer",
-                        json!(
-                            vec.iter()
-                                .map(|(cnt, s)| {
-                                    json!({
-                                        "cnt": cnt,
-                                        "message": s
-                                    })
-                                })
-                                .collect::<Vec<_>>()
-                        ),
-                    ),
-                    JudgeResult::TimeLimitExceeded => ("TimeLimitExceeded", json!("")),
-                    JudgeResult::MemoryLimitExceeded => ("MemoryLimitExceeded", json!("")),
-                    JudgeResult::RuntimeError(s) => (
-                        "RuntimeError",
-                        json!({
-                            "message": s
-                        }),
-                    ),
-                    JudgeResult::CompileError(s) => (
-                        "CompileError",
-                        json!({
-                            "message": s
-                        }),
-                    ),
-                    JudgeResult::SystemError(s) => (
-                        "SystemError",
-                        json!({
-                            "message": s
-                        }),
-                    ),
+                    JudgeResult::CompileError(s) => json!({
+                        "status": "CompileError",
+                        "errorDetail": s,
+                        "submissionNo": payload.submission_id,
+                    }),
+                    JudgeResult::OtherError(vec) => json!({
+                        "status": vec[0].r#type,
+                        "resultDetail": vec,
+                        "submissionNo": payload.submission_id,
+                    }),
                 }
             }
-            Err(e) => {
-                warn!("Error during judging: {}", e);
-                (
-                    "JudgendError",
-                    json!({
-                        "message": format!("System error during judging: {}", e)
-                    }),
-                )
-            }
-        };
-        let client = Client::new();
-        match client
-            .put(&server_addr)
-            .json(&json!({
-                "status": status,
-                "detail": detail,
+            Err(e) => json!({
+                "status": "JudgendError",
+                "errorDetail": format!("Judging failed: {}", e),
                 "submissionNo": payload.submission_id,
-            }))
-            .send()
-            .await
-        {
+            }),
+        };
+        info!(
+            "Reporting result to backend for submission_id={}: {}",
+            &payload.submission_id,
+            json_content
+        );
+        let client = Client::new();
+        match client.put(&server_addr).json(&json_content).send().await {
             Ok(resp) => {
                 info!(
                     "Reported result to backend for submission_id={}: response_status={}",
@@ -200,7 +169,6 @@ where
         }
     }
 }
-
 
 static JUDGE_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
 

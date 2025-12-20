@@ -6,8 +6,8 @@
 
 use crate::config::init_config;
 use crate::logger::init_logger;
-use axum::routing::{get, post};
 use axum::Router;
+use axum::routing::{get, post};
 mod config;
 mod error;
 mod fs;

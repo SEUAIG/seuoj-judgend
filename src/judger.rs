@@ -1,7 +1,9 @@
+use crate::config::AijConfig;
 use crate::error::{AijError, Result};
-use crate::fs::{get_dir_by_submission_id, get_path_by_id_name};
+use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 use judger::Config;
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 mod comparer;
 
@@ -212,6 +214,7 @@ pub(crate) async fn judge(
     };
     let mut config = problem_info.to_judger_config();
     config.seccomp_rule_name = Some(seccomp_rule);
+    let mut out_vec = vec![];
     for i in 1..=problem_info.test_case_number {
         let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
         let ans_path = get_path_by_id_name(&pid, &format!("{}.ans", i)).await?;
@@ -246,52 +249,86 @@ pub(crate) async fn judge(
         };
         let res = judger::run(&config, interactor)
             .map_err(|e| AijError::Judge(format!("Judger run failed: {}", e)))?;
-        match res.result {
-            judger::ErrorCode::Success => {}
+        info!(
+            "Judger result for test case {} of submission {}: {:?}",
+            i, submission_id, res
+        );
+        let truncated_len = AijConfig::get().await?.output_truncate_length;
+        let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
+        let ans_content = get_text_by_path(&ans_path, Some(truncated_len)).await?;
+        let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
+        let (sys, r#type) = match res.result {
+            judger::ErrorCode::Success => {
+                let (res, detail) =
+                    comparer::standard_comparer(&config.output_path, &ans_path).await?;
+                if !res {
+                    (detail, "WrongAnswer")
+                } else {
+                    ("Accepted".to_string(), "Accepted")
+                }
+            }
             judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
-                return Ok(JudgeResult::TimeLimitExceeded);
+                ("Time Limit Exceeded".to_string(), "TimeLimitExceeded")
             }
             judger::ErrorCode::MemoryLimitExceeded => {
-                return Ok(JudgeResult::MemoryLimitExceeded);
+                ("Memory Limit Exceeded".to_string(), "MemoryLimitExceeded")
             }
-            judger::ErrorCode::RuntimeError => {
-                return Ok(JudgeResult::RuntimeError(format!(
-                    "Runtime error on test case {} result: {:?}",
-                    i, res
-                )));
-            }
+            judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), "RuntimeError"),
             judger::ErrorCode::SystemError => {
-                return Ok(JudgeResult::SystemError(format!(
-                    "System error on test case {} result: {:?}",
-                    i, res
-                )));
+                let err_info = format!(
+                    "Judger System Error on submission {} test case {}: {:?}",
+                    submission_id, i, res
+                );
+                warn!("{err_info}");
+                (err_info, "SystemError")
             }
             _ => {
                 return Err(AijError::Judge(format!(
-                    "Unexpected judger result: {:?}",
-                    res
+                    "Unexpected judger result: {:?} for submission {} on test case {}",
+                    res, submission_id, i
                 )));
             }
-        }
-        let (res, detail) = comparer::standard_comparer(&config.output_path, &ans_path).await?;
-        if !res {
-            return Ok(JudgeResult::WrongAnswer(vec![(i as usize, detail)]));
-        }
+        };
+        out_vec.push(JudgeResultItem {
+            cnt: i as usize,
+            time: res.cpu_time,
+            memory: res.memory,
+            sys,
+            r#in: in_content,
+            ans: ans_content,
+            out: out_content,
+            r#type: r#type.to_string(),
+        });
     }
-    // Placeholder for the judging logic
-    Ok(JudgeResult::Accepted)
+    Ok(JudgeResult::OtherError(out_vec))
+}
+
+/// Result of once judging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct JudgeResultItem {
+    /// count of the test case
+    pub(crate) cnt: usize,
+    /// real time used in milliseconds
+    pub(crate) time: i32,
+    /// memory used in bytes
+    pub(crate) memory: i64,
+    /// output of system
+    pub(crate) sys: String,
+    /// input of test case
+    pub(crate) r#in: String,
+    /// expected answer of test case
+    pub(crate) ans: String,
+    /// output of user code
+    pub(crate) out: String,
+    /// type of the result
+    pub(crate) r#type: String,
 }
 
 /// Result of the judging process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
-    Accepted,
-    WrongAnswer(Vec<(usize, String)>),
-    TimeLimitExceeded,
-    MemoryLimitExceeded,
-    RuntimeError(String),
     CompileError(String),
-    SystemError(String),
+    OtherError(Vec<JudgeResultItem>),
 }
 
 #[cfg(test)]

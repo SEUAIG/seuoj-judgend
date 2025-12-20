@@ -1,6 +1,8 @@
 use crate::error::Result;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use tokio::io::AsyncReadExt;
+
 static INSTANCE: OnceLock<FileSystem> = OnceLock::new();
 
 /// Read and write files to the local filesystem.
@@ -91,4 +93,31 @@ pub(crate) async fn delete_dir_by_submission_id(submission_id: &str) -> Result<(
         })?;
     }
     Ok(())
+}
+
+pub(crate) async fn get_text_by_path(
+    path: impl AsRef<Path>,
+    truncate_len: Option<usize>,
+) -> Result<String> {
+    let mut file = tokio::fs::File::open(&path).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to open file {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })?;
+    if let Some(len) = truncate_len {
+        let mut buffer = vec![0u8; len];
+        let n = file
+            .read(&mut buffer)
+            .await
+            .map_err(|e| crate::error::AijError::FileSystem(format!("Read error: {}", e)))?;
+        Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
+    } else {
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .await
+            .map_err(|e| crate::error::AijError::FileSystem(format!("Read error: {}", e)))?;
+        Ok(content)
+    }
 }
