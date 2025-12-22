@@ -165,7 +165,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -306,7 +306,7 @@ pub(crate) async fn judge(
         out_vec.push(JudgeResultItem {
             cnt: i as usize,
             time: res.cpu_time,
-            memory: res.memory,
+            mem: res.memory,
             sys,
             r#in: in_content,
             ans: ans_content,
@@ -325,7 +325,7 @@ pub(crate) struct JudgeResultItem {
     /// real time used in milliseconds
     pub(crate) time: i32,
     /// memory used in bytes
-    pub(crate) memory: i64,
+    pub(crate) mem: i64,
     /// output of system
     pub(crate) sys: String,
     /// input of test case
