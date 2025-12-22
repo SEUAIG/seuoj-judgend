@@ -1,42 +1,43 @@
+//! File system operations for reading and writing problem and submission data.
+use crate::config::AijConfig;
 use crate::error::Result;
 use crate::judger::ProblemInfo;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use tokio::io::AsyncReadExt;
+use tokio::sync::OnceCell;
 
-static INSTANCE: OnceLock<FileSystem> = OnceLock::new();
+static INSTANCE: OnceCell<FileSystem> = OnceCell::const_new();
 
 /// Read and write files to the local filesystem.
-pub(crate) struct FileSystem {
+pub struct FileSystem {
     base_path: PathBuf,
 }
 
 impl FileSystem {
     /// Get the singleton instance of the FileSystem.
-    pub(crate) fn get() -> Result<&'static Self> {
-        INSTANCE.get().ok_or_else(|| {
-            crate::error::AijError::FileSystem("FileSystem is not initialized".to_string())
-        })
-    }
-
-    /// Initialize the FileSystem with the given base path.
-    pub(crate) fn init(base_path: impl AsRef<Path>) -> Result<()> {
-        // Create the path if it doesn't exist
-        std::fs::create_dir_all(base_path.as_ref()).map_err(|e| {
-            crate::error::AijError::FileSystem(format!(
-                "Failed to create base path {}: {}",
-                base_path.as_ref().to_string_lossy(),
-                e
-            ))
-        })?;
-
-        let fs = FileSystem {
-            base_path: base_path.as_ref().to_path_buf(),
-        };
-        INSTANCE.set(fs).map_err(|_| {
-            crate::error::AijError::FileSystem("FileSystem already initialized".to_string())
-        })
+    pub(crate) async fn get() -> Result<&'static Self> {
+        INSTANCE
+            .get_or_try_init(async || {
+                let config = AijConfig::get().await.map_err(|e| {
+                    crate::error::AijError::FileSystem(format!("Failed to get config: {}", e))
+                })?;
+                if !config.problems_dir.exists() {
+                    tokio::fs::create_dir_all(&config.problems_dir)
+                        .await
+                        .map_err(|e| {
+                            crate::error::AijError::FileSystem(format!(
+                                "Failed to create problems directory {}: {}",
+                                config.problems_dir.to_string_lossy(),
+                                e
+                            ))
+                        })?;
+                }
+                Ok(FileSystem {
+                    base_path: config.problems_dir.clone(),
+                })
+            })
+            .await
     }
 }
 
@@ -102,7 +103,7 @@ pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<St
 }
 
 pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<PathBuf> {
-    let fs = FileSystem::get()?;
+    let fs = FileSystem::get().await?;
     let file_path = fs.base_path.join(pid).join(filename);
     if !file_path.exists() {
         return Err(crate::error::AijError::FileSystem(format!(
@@ -114,7 +115,7 @@ pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<Pat
 }
 
 pub(crate) async fn get_dir_by_submission_id(submission_id: &str) -> Result<PathBuf> {
-    let fs = FileSystem::get()?;
+    let fs = FileSystem::get().await?;
     let dir_path = fs.base_path.join("submissions").join(submission_id);
     if !dir_path.exists() {
         tokio::fs::create_dir_all(&dir_path).await.map_err(|e| {

@@ -1,11 +1,13 @@
+//! Error handling module for the application.
 use std::fmt::Display;
 
-pub(crate) type Result<T> = std::result::Result<T, AijError>;
+/// A specialized `Result` type for the application.
+pub type Result<T> = std::result::Result<T, AijError>;
 
 /// An enumeration representing possible errors in the application.
 #[derive(Debug)]
 #[allow(dead_code)]
-pub(crate) enum AijError {
+pub enum AijError {
     /// Configuration related errors
     Config(String),
     /// Logging related errors
