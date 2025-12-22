@@ -165,7 +165,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -348,11 +348,9 @@ pub(crate) enum JudgeResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fs::FileSystem;
 
     #[tokio::test]
     async fn test_problem_info_from_pid() {
-        FileSystem::init("./assets/problems").unwrap();
         let pid = "1";
         let info = ProblemInfo::from_pid(pid).await;
         assert!(info.is_ok());

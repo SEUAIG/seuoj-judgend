@@ -1,13 +1,13 @@
 //! Server-related functionalities for the AI Judge system.
 use crate::config::AijConfig;
 use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
-use crate::judger::{judge, JudgeResult, SupportedLanguages};
-use axum::extract::rejection::JsonRejection;
+use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use axum::Json;
 use axum::extract::Path;
+use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -24,7 +24,7 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
             "message": "Success",
             "data": content,
         }))
-            .into_response(),
+        .into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
             Json(json!({
@@ -64,7 +64,7 @@ pub(crate) async fn judge_problem_by_id(
             payload.language,
             payload.submission_id.clone(),
         )
-            .await;
+        .await;
         drop(sem);
         match AijConfig::get().await {
             Ok(config) => {
@@ -142,7 +142,7 @@ pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection=JsonRejection>,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);

@@ -1,17 +1,13 @@
 use aij_judgend::app;
 use aij_judgend::config::AijConfig;
-use aij_judgend::fs::FileSystem;
 use aij_judgend::logger::init_logger;
 use axum_test::TestServer;
 use serde_json::json;
 
 #[tokio::test]
 async fn test_submission() {
-    let config = AijConfig::init()
-        .await
-        .expect("Failed to initialize config");
+    let config = AijConfig::get().await.expect("Failed to initialize config");
     let _guard = init_logger(&config.log_dir);
-    FileSystem::init(&config.problems_dir).expect("Failed to initialize file system");
     let server = TestServer::new(app()).expect("Failed to create test server");
 
     let response = server
