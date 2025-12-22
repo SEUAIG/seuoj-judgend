@@ -264,7 +264,7 @@ pub(crate) async fn judge(
             "Judger result for test case {} of submission {}: {:?}",
             i, submission_id, res
         );
-        let truncated_len = AijConfig::get().await?.output_truncate_length;
+        let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
         let ans_content = get_text_by_path(&ans_path, Some(truncated_len)).await?;
         let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
@@ -353,6 +353,7 @@ mod tests {
     async fn test_problem_info_from_pid() {
         let pid = "1";
         let info = ProblemInfo::from_pid(pid).await;
+        println!("{:?}", info);
         assert!(info.is_ok());
         let info = info.unwrap();
         assert_eq!(info.test_case_number, 1);

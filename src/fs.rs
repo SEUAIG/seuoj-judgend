@@ -19,9 +19,7 @@ impl FileSystem {
     pub(crate) async fn get() -> Result<&'static Self> {
         INSTANCE
             .get_or_try_init(async || {
-                let config = AijConfig::get().await.map_err(|e| {
-                    crate::error::AijError::FileSystem(format!("Failed to get config: {}", e))
-                })?;
+                let config = AijConfig::get();
                 if !config.problems_dir.exists() {
                     tokio::fs::create_dir_all(&config.problems_dir)
                         .await

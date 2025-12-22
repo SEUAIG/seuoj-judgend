@@ -66,21 +66,15 @@ pub(crate) async fn judge_problem_by_id(
         )
         .await;
         drop(sem);
-        match AijConfig::get().await {
-            Ok(config) => {
-                if !config.save_submissions
-                    && let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await
-                {
-                    warn!(
-                        "Failed to delete submission files for submission_id={}: {}",
-                        &payload.submission_id, e
-                    );
-                }
-            }
-            Err(e) => {
-                error!("Failed to get config for logging: {}", e);
-            }
+        if !AijConfig::get().save_submissions
+            && let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await
+        {
+            warn!(
+                "Failed to delete submission files for submission_id={}: {}",
+                &payload.submission_id, e
+            );
         }
+
         let server_addr = match AijConfig::get_backend_base_addr().await {
             Ok(addr) => {
                 format!("{}/judge/submission/{}", addr, &payload.submission_id)
@@ -165,10 +159,7 @@ static JUDGE_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
 
 pub(crate) async fn get_judge_semaphore() -> &'static Semaphore {
     if JUDGE_SEMAPHORE.get().is_none() {
-        let max_concurrent = match AijConfig::get().await {
-            Ok(config) => config.max_concurrent_requests,
-            Err(_) => 6,
-        };
+        let max_concurrent = AijConfig::get().max_concurrent_requests;
         let _ = JUDGE_SEMAPHORE.set(Semaphore::new(max_concurrent));
     }
     #[allow(clippy::unwrap_used)]
