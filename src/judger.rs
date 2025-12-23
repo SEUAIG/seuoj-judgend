@@ -353,7 +353,6 @@ mod tests {
     async fn test_problem_info_from_pid() {
         let pid = "1";
         let info = ProblemInfo::from_pid(pid).await;
-        println!("{:?}", info);
         assert!(info.is_ok());
         let info = info.unwrap();
         assert_eq!(info.test_case_number, 1);
