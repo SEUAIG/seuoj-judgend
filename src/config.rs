@@ -45,7 +45,7 @@ impl Default for AijConfig {
             backend_port: 8080,
             backend_prefix: "".into(),
             save_submissions: false,
-            output_truncate_length: 1000,
+            output_truncate_length: 200,
         }
     }
 }
