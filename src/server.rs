@@ -75,7 +75,7 @@ pub(crate) async fn judge_problem_by_id(
             );
         }
 
-        let server_addr = match AijConfig::get_backend_base_addr().await {
+        let server_addr = match AijConfig::get_backend_base_addr() {
             Ok(addr) => {
                 format!("{}/judge/submission/{}", addr, &payload.submission_id)
             }

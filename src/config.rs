@@ -105,7 +105,7 @@ impl AijConfig {
         self
     }
 
-    pub(crate) async fn get_backend_base_addr() -> Result<String> {
+    pub(crate) fn get_backend_base_addr() -> Result<String> {
         let config = Self::get();
         Ok(format!(
             "http://{}:{}{}",
