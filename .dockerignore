@@ -1,0 +1,18 @@
+# --- Rust 相关 ---
+target/             # 绝对不要复制本地编译产物，会导致架构冲突
+**/*.rs.bk          # 备份文件
+# --- 隐藏文件与工具 ---
+.git/               # 整个 Git 历史（可能非常大）
+.gitignore
+.dockerignore
+.vscode/
+.idea/
+.DS_Store           # macOS 系统文件
+Thumbs.db           # Windows 系统文件
+
+# --- 文档与临时文件 ---
+README.md
+docs/
+*.log
+tmp/
+assets/logs/

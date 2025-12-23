@@ -5,7 +5,7 @@ use axum_test::TestServer;
 
 #[tokio::test]
 async fn test_get_problem() {
-    let config = AijConfig::get().await.expect("Failed to initialize config");
+    let config = AijConfig::get();
     let _guard = init_logger(&config.log_dir);
     let server = TestServer::new(app()).expect("Failed to create test server");
 

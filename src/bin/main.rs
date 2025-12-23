@@ -8,7 +8,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = AijConfig::get().await?;
+    let config = AijConfig::get();
     let _guard = init_logger(&config.log_dir);
     info!(
         "FileSystem initialized with base path: {}",
