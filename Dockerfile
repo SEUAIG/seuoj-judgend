@@ -40,7 +40,6 @@ WORKDIR /app
 
 # 从编译阶段拷贝 Rust 二进制文件
 COPY --from=builder /app/target/release/main ./runner
-COPY assets ./assets
 
 # 验证各语言版本，确保环境就绪
 RUN gcc --version && \
