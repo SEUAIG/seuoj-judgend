@@ -65,15 +65,18 @@ pub(crate) struct Problem {
 pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
     let problem_info = ProblemInfo::from_pid(pid).await?;
     let mut example = vec![];
-    for i in 1..=problem_info.test_case_number {
-        let r#in = read_file_by_id_name(pid, &format!("example_{}.in", i)).await?;
-        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", i)).await?;
-        let description = read_file_by_id_name(pid, &format!("example_{}.md", i)).await?;
+    let mut sample_index = 1;
+    while let Ok(r#in) = read_file_by_id_name(pid, &format!("example_{}.in", sample_index)).await {
+        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", sample_index)).await?;
+        let description = read_file_by_id_name(pid, &format!("example_{}.md", sample_index))
+            .await
+            .unwrap_or_default();
         example.push(Sample {
             r#in,
             ans,
             description,
         });
+        sample_index += 1;
     }
     let config = problem_info.to_judger_config();
     Ok(Problem {
