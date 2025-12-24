@@ -37,7 +37,7 @@ pub(crate) struct ProblemInfo {
     /// Maximum number of processes (-1 for unlimited).
     pub(crate) max_process_number: Option<i32>,
     /// Maximum output size in bytes (-1 for unlimited).
-    pub(crate) max_output_size_byte: Option<i64>,
+    pub(crate) max_output_size: Option<i64>,
     /// Number of test cases
     pub(crate) test_case_number: i32,
     /// type of the problem
@@ -91,7 +91,7 @@ impl ProblemInfo {
         if let Some(process_number) = self.max_process_number {
             config.max_process_number = process_number;
         }
-        if let Some(output_size) = self.max_output_size_byte {
+        if let Some(output_size) = self.max_output_size {
             config.max_output_size = output_size;
         }
         config
