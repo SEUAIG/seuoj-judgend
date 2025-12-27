@@ -165,7 +165,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -228,7 +228,10 @@ pub(crate) async fn judge(
     let mut out_vec = vec![];
     for i in 1..=problem_info.test_case_number {
         let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
-        let ans_path = get_path_by_id_name(&pid, &format!("{}.ans", i)).await?;
+        let ans_path = match problem_info.problem_type {
+            ProblemType::Standard => get_path_by_id_name(&pid, &format!("{}.ans", i)).await?,
+            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", i)),
+        };
         let mut config = config.clone();
         config.exe_path = exec_path.clone();
         config.args = args.clone();
@@ -266,7 +269,10 @@ pub(crate) async fn judge(
         );
         let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
-        let ans_content = get_text_by_path(&ans_path, Some(truncated_len)).await?;
+        let ans_content = match problem_info.problem_type {
+            ProblemType::Standard => get_text_by_path(&ans_path, Some(truncated_len)).await?,
+            ProblemType::Interactive => Default::default(),
+        };
         let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
         let (sys, r#type) = match res.result {
             judger::ErrorCode::Success => {
