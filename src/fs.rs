@@ -67,7 +67,9 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
     let mut example = vec![];
     let mut sample_index = 1;
     while let Ok(r#in) = read_file_by_id_name(pid, &format!("example_{}.in", sample_index)).await {
-        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", sample_index)).await?;
+        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", sample_index))
+            .await
+            .unwrap_or_default();
         let description = read_file_by_id_name(pid, &format!("example_{}.md", sample_index))
             .await
             .unwrap_or_default();
@@ -83,7 +85,9 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
         pid: pid.to_string(),
         description: read_file_by_id_name(pid, "description.md").await?,
         input: read_file_by_id_name(pid, "input.md").await?,
-        output: read_file_by_id_name(pid, "output.md").await?,
+        output: read_file_by_id_name(pid, "output.md")
+            .await
+            .unwrap_or_default(),
         example,
         time_limit: config.max_cpu_time,
         mem_limit: config.max_memory,
