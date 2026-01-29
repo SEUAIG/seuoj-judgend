@@ -2,9 +2,8 @@
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-use judger::Config;
+pub(crate) use crate::judger::utils::{ProblemInfo, ProblemType};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 use tracing::{info, warn};
 use utils::chmod_plus_x;
 
@@ -23,92 +22,6 @@ pub(crate) enum SupportedLanguages {
     Nodejs22,
     Go1_22,
     Java17,
-}
-
-/// Information about a problem
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ProblemInfo {
-    /// Maximum CPU time in milliseconds (-1 for unlimited).
-    pub(crate) max_cpu_time_ms: Option<i32>,
-    /// Maximum real time in milliseconds (-1 for unlimited).
-    pub(crate) max_real_time_ms: Option<i32>,
-    /// Maximum memory in bytes (-1 for unlimited).
-    pub(crate) max_memory_byte: Option<i64>,
-    /// Maximum stack size in bytes.
-    pub(crate) max_stack_byte: Option<i64>,
-    /// Maximum number of processes (-1 for unlimited).
-    pub(crate) max_process_number: Option<i32>,
-    /// Maximum output size in bytes (-1 for unlimited).
-    pub(crate) max_output_size: Option<i64>,
-    /// Number of test cases
-    pub(crate) test_case_number: i32,
-    /// type of the problem
-    pub(crate) problem_type: ProblemType,
-    /// type of the checker
-    pub(crate) checker_type: CheckerType,
-}
-
-/// Type of the problem
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum ProblemType {
-    /// Standard IO problem
-    Standard,
-    /// Interactive problem
-    Interactive,
-}
-
-/// Type of the checker
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum CheckerType {
-    /// Standard
-    Standard,
-    /// Special judge
-    Special,
-}
-
-impl Display for ProblemType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProblemType::Standard => write!(f, "Standard"),
-            ProblemType::Interactive => write!(f, "Interactive"),
-        }
-    }
-}
-
-impl ProblemInfo {
-    pub(crate) async fn from_pid(pid: &str) -> Result<Self> {
-        let content = crate::fs::read_file_by_id_name(pid, "info.json").await?;
-        let info: ProblemInfo = serde_json::from_str(&content).map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to parse info.json for problem {}: {}",
-                pid, e
-            ))
-        })?;
-        Ok(info)
-    }
-
-    pub(crate) fn to_judger_config(&self) -> Config {
-        let mut config = Config::default();
-        if let Some(cpu_time) = self.max_cpu_time_ms {
-            config.max_cpu_time = cpu_time;
-        }
-        if let Some(real_time) = self.max_real_time_ms {
-            config.max_real_time = real_time;
-        }
-        if let Some(memory) = self.max_memory_byte {
-            config.max_memory = memory;
-        }
-        if let Some(stack) = self.max_stack_byte {
-            config.max_stack = stack;
-        }
-        if let Some(process_number) = self.max_process_number {
-            config.max_process_number = process_number;
-        }
-        if let Some(output_size) = self.max_output_size {
-            config.max_output_size = output_size;
-        }
-        config
-    }
 }
 
 pub(crate) async fn judge(
@@ -178,7 +91,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -239,7 +152,15 @@ pub(crate) async fn judge(
     let mut config = problem_info.to_judger_config();
     config.seccomp_rule_name = Some(seccomp_rule);
     let mut out_vec = vec![];
-    for i in 1..=problem_info.test_case_number {
+    let test_case_number = problem_info
+        .test_case_number
+        .ok_or_else(|| {
+            AijError::Judge(format!(
+                "Test case number is not specified for problem `{}` (expected in info.json)",
+                pid
+            ))
+        })?;
+    for i in 1..=test_case_number {
         let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
         let ans_path = match problem_info.problem_type {
             ProblemType::Standard => get_path_by_id_name(&pid, &format!("{}.ans", i)).await?,
@@ -305,7 +226,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         problem_info.checker_type,
                     )
-                    .await?;
+                        .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
@@ -379,7 +300,7 @@ pub(crate) enum JudgeResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::judger::utils::{ProblemInfo, ProblemType};
 
     #[tokio::test]
     async fn test_problem_info_from_pid() {
@@ -387,7 +308,7 @@ mod tests {
         let info = ProblemInfo::from_pid(pid).await;
         assert!(info.is_ok());
         let info = info.unwrap();
-        assert_eq!(info.test_case_number, 1);
+        assert_eq!(info.test_case_number, Some(1));
         assert_eq!(info.problem_type, ProblemType::Standard);
     }
 }

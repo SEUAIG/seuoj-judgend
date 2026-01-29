@@ -11,7 +11,7 @@
     - `max_memory_byte`: 最大内存限制，单位字节(可选，默认128MB, -1表示无穷)
     - `max_stack_byte`: 最大栈内存限制，单位字节(可选，默认32MB)
     - `max_process_number`: 最大进程数(可选，默认1, -1表示无穷)
-    - `max_output_size`: 最大输出大小(可选，默认10000, -1表示无穷)
+    - `max_output_size`: 最大输出大小(可选，默认1000000, -1表示无穷)
     - `test_case_number`: 测试点数量
     - `problem_type`: 题目类型，支持 "Standard"（标准题）和 "Interactive"（交互式题）
     - `checker_type`: 检查器类型，支持 "Standard"（标准检查器）和 "Special"（特殊检查器）

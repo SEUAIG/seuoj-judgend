@@ -55,15 +55,17 @@ pub(crate) struct Problem {
     pub(crate) input: String,
     pub(crate) output: String,
     pub(crate) example: Vec<Sample>,
-    #[serde(rename = "timeLimit")]
-    pub(crate) time_limit: i32,
-    #[serde(rename = "memLimit")]
-    pub(crate) mem_limit: i64,
-    pub(crate) r#type: String,
+    pub(crate) info: ProblemInfo,
 }
 
 pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
-    let problem_info = ProblemInfo::from_pid(pid).await?;
+    let problem_info = ProblemInfo::from_pid(pid).await?.apply_defaults();
+    if problem_info.test_case_number.is_none() {
+        return Err(crate::error::AijError::FileSystem(format!(
+            "Problem {} is missing test case number info",
+            pid
+        )));
+    }
     let mut example = vec![];
     let mut sample_index = 1;
     while let Ok(r#in) = read_file_by_id_name(pid, &format!("example_{}.in", sample_index)).await {
@@ -80,7 +82,6 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
         });
         sample_index += 1;
     }
-    let config = problem_info.to_judger_config();
     Ok(Problem {
         pid: pid.to_string(),
         description: read_file_by_id_name(pid, "description.md").await?,
@@ -89,9 +90,7 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
             .await
             .unwrap_or_default(),
         example,
-        time_limit: config.max_cpu_time,
-        mem_limit: config.max_memory,
-        r#type: problem_info.problem_type.to_string(),
+        info: problem_info,
     })
 }
 
