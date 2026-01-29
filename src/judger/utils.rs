@@ -1,8 +1,12 @@
+use crate::config::AijConfig;
 use crate::error::AijError;
+use crate::error::Result;
+use crate::fs;
 use judger::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::path::Path;
+use tracing::error;
 
 /// Information about a problem
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,9 +26,9 @@ pub(crate) struct ProblemInfo {
     /// Number of test cases
     pub(crate) test_case_number: Option<i32>,
     /// type of the problem
-    pub(crate) problem_type: ProblemType,
+    pub(crate) problem_type: Option<ProblemType>,
     /// type of the checker
-    pub(crate) checker_type: CheckerType,
+    pub(crate) checker_type: Option<CheckerType>,
 }
 
 /// Type of the problem
@@ -63,10 +67,10 @@ impl ProblemInfo {
                 pid, e
             ))
         })?;
-        Ok(info)
+        Ok(info.apply_defaults())
     }
 
-    pub(crate) fn apply_defaults(mut self) -> Self {
+    fn apply_defaults(mut self) -> Self {
         if self.max_cpu_time_ms.is_none() {
             self.max_cpu_time_ms = Some(1000);
         }
@@ -84,6 +88,15 @@ impl ProblemInfo {
         }
         if self.max_output_size.is_none() {
             self.max_output_size = Some(1000000);
+        }
+        if self.test_case_number.is_none() {
+            self.test_case_number = Some(1);
+        }
+        if self.problem_type.is_none() {
+            self.problem_type = Some(ProblemType::Standard);
+        }
+        if self.checker_type.is_none() {
+            self.checker_type = Some(CheckerType::Standard);
         }
         self
     }
@@ -110,6 +123,49 @@ impl ProblemInfo {
         }
         config
     }
+
+    pub(crate) fn update_from_option(&mut self, other: &ProblemInfo) {
+        if other.max_cpu_time_ms.is_some() {
+            self.max_cpu_time_ms = other.max_cpu_time_ms;
+        }
+        if other.max_real_time_ms.is_some() {
+            self.max_real_time_ms = other.max_real_time_ms;
+        }
+        if other.max_memory_byte.is_some() {
+            self.max_memory_byte = other.max_memory_byte;
+        }
+        if other.max_stack_byte.is_some() {
+            self.max_stack_byte = other.max_stack_byte;
+        }
+        if other.max_process_number.is_some() {
+            self.max_process_number = other.max_process_number;
+        }
+        if other.max_output_size.is_some() {
+            self.max_output_size = other.max_output_size;
+        }
+        if other.test_case_number.is_some() {
+            self.test_case_number = other.test_case_number;
+        }
+        if other.problem_type.is_some() {
+            self.problem_type = other.problem_type;
+        }
+        if other.checker_type.is_some() {
+            self.checker_type = other.checker_type;
+        }
+    }
+
+    pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
+        let info_json = serde_json::to_string_pretty(&self).map_err(|e| {
+            error!(
+                "Failed to serialize problem info for problem id {}: {}",
+                pid.as_ref(),
+                e
+            );
+            AijError::Server(format!("Failed to serialize problem info: {}", e))
+        })?;
+        let info_path = fs::get_path_by_id_name(pid.as_ref(), "info.json", false).await?;
+        fs::write_to_file(&info_path, &info_json).await
+    }
 }
 
 /// Make the file at `path` executable by adding execute permissions for user, group, and others.
@@ -123,6 +179,48 @@ pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> tokio::io::Result<()
             permissions.set_mode(permissions.mode() | 0o111);
             return tokio::fs::set_permissions(&path, permissions).await;
         }
+    }
+    Ok(())
+}
+
+pub(crate) async fn compile(path: impl AsRef<Path>) -> crate::error::Result<()> {
+    let testlib_path = &AijConfig::get().testlib_dir;
+    let output = tokio::process::Command::new("g++")
+        .arg(path.as_ref())
+        .arg("-o")
+        .arg(path.as_ref().with_extension(""))
+        .arg("-O2")
+        .arg("-static")
+        .arg("-std=c++23")
+        .arg("-I")
+        .arg(testlib_path)
+        .output()
+        .await
+        .map_err(|e| {
+            let message = if e.kind() == std::io::ErrorKind::NotFound {
+                "g++ not found. Please ensure g++ is installed and in the system PATH.".to_string()
+            } else {
+                e.to_string()
+            };
+            error!("Compilation error: {}", message);
+            AijError::Request(format!(
+                "Failed to execute g++ for {}: {}",
+                path.as_ref().display(),
+                message
+            ))
+        })?;
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr);
+        error!(
+            "Compilation failed for {}: {}",
+            path.as_ref().display(),
+            message
+        );
+        return Err(AijError::Request(format!(
+            "Compilation failed for {}: {}",
+            path.as_ref().display(),
+            message
+        )));
     }
     Ok(())
 }

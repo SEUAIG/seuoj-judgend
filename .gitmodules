@@ -1,0 +1,3 @@
+[submodule "assets/testlib"]
+	path = assets/testlib
+	url = https://github.com/SEUAIG/aijlib.git

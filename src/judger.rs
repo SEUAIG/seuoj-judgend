@@ -2,7 +2,7 @@
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-pub(crate) use crate::judger::utils::{ProblemInfo, ProblemType};
+pub(crate) use crate::judger::utils::{CheckerType, ProblemInfo, ProblemType, compile};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use utils::chmod_plus_x;
@@ -91,7 +91,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -152,18 +152,28 @@ pub(crate) async fn judge(
     let mut config = problem_info.to_judger_config();
     config.seccomp_rule_name = Some(seccomp_rule);
     let mut out_vec = vec![];
-    let test_case_number = problem_info
-        .test_case_number
-        .ok_or_else(|| {
-            AijError::Judge(format!(
-                "Test case number is not specified for problem `{}` (expected in info.json)",
-                pid
-            ))
-        })?;
+    let test_case_number = problem_info.test_case_number.ok_or_else(|| {
+        AijError::Judge(format!(
+            "Test case number is not specified for problem `{}` (expected in info.json)",
+            pid
+        ))
+    })?;
+    let problem_type = problem_info.problem_type.ok_or_else(|| {
+        AijError::Judge(format!(
+            "Problem type is not specified for problem `{}` (expected in info.json)",
+            pid
+        ))
+    })?;
+    let checker_type = problem_info.checker_type.ok_or_else(|| {
+        AijError::Judge(format!(
+            "Checker type is not specified for problem `{}` (expected in info.json)",
+            pid
+        ))
+    })?;
     for i in 1..=test_case_number {
-        let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
-        let ans_path = match problem_info.problem_type {
-            ProblemType::Standard => get_path_by_id_name(&pid, &format!("{}.ans", i)).await?,
+        let input_path = get_path_by_id_name(&pid, &format!("{}.in", i), true).await?;
+        let ans_path = match problem_type {
+            ProblemType::Standard => get_path_by_id_name(&pid, &format!("{}.ans", i), true).await?,
             ProblemType::Interactive => tmp_dir.join(format!("{}.ans", i)),
         };
         let mut config = config.clone();
@@ -182,10 +192,10 @@ pub(crate) async fn judge(
             .join(format!("{}.log", i))
             .to_string_lossy()
             .to_string();
-        let interactor = match &problem_info.problem_type {
+        let interactor = match problem_type {
             ProblemType::Standard => None,
             ProblemType::Interactive => Some({
-                let path = get_path_by_id_name(&pid, "interactor").await?;
+                let path = get_path_by_id_name(&pid, "interactor", true).await?;
                 if !path.exists() {
                     return Err(AijError::FileSystem(format!(
                         "Interactor file does not exist: {}",
@@ -210,7 +220,7 @@ pub(crate) async fn judge(
         );
         let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
-        let ans_content = match problem_info.problem_type {
+        let ans_content = match problem_type {
             ProblemType::Standard => get_text_by_path(&ans_path, Some(truncated_len)).await?,
             ProblemType::Interactive => Default::default(),
         };
@@ -218,15 +228,15 @@ pub(crate) async fn judge(
         let (sys, r#type) = match res.result {
             judger::ErrorCode::Success => {
                 let mut result = ("Accepted".to_string(), "Accepted");
-                if problem_info.problem_type != ProblemType::Interactive {
+                if problem_type != ProblemType::Interactive {
                     let (res, detail) = checker::check(
                         &pid,
                         &config.input_path,
                         &config.output_path,
                         &ans_path,
-                        problem_info.checker_type,
+                        checker_type,
                     )
-                        .await?;
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
@@ -309,6 +319,6 @@ mod tests {
         assert!(info.is_ok());
         let info = info.unwrap();
         assert_eq!(info.test_case_number, Some(1));
-        assert_eq!(info.problem_type, ProblemType::Standard);
+        assert_eq!(info.problem_type, Some(ProblemType::Standard));
     }
 }

@@ -4,9 +4,12 @@
 #![deny(clippy::panic)]
 //! SEU AIJ Judge-Endpoint
 
-use crate::server::{get_problem_by_id, judge_problem_by_id};
+use crate::server::{
+    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, upload_problem_data,
+};
 use axum::Router;
-use axum::routing::{get, post};
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{get, patch, post};
 
 pub mod config;
 pub mod error;
@@ -20,4 +23,7 @@ pub fn app() -> Router {
     Router::new()
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))
+        .route("/judge/problem/edit", patch(edit_problem_by_id))
+        .route("/judge/problem/data", post(upload_problem_data))
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
 }

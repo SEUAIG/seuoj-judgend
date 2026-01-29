@@ -21,6 +21,8 @@ pub struct AijConfig {
     pub problems_dir: PathBuf,
     /// Path of the log directory
     pub log_dir: PathBuf,
+    /// Path of testlib directory
+    pub testlib_dir: PathBuf,
     /// Host of the backend server
     pub backend_host: String,
     /// Port of the backend server
@@ -41,6 +43,7 @@ impl Default for AijConfig {
             max_concurrent_requests: 6,
             problems_dir: "./assets/problems/".into(),
             log_dir: "./assets/logs/".into(),
+            testlib_dir: "./assets/testlib/".into(),
             backend_host: "127.0.0.1".into(),
             backend_port: 8080,
             backend_prefix: "".into(),
@@ -77,6 +80,9 @@ impl AijConfig {
         }
         if let Ok(val) = env::var("AIJ_LOG_DIR") {
             self.log_dir = PathBuf::from(val);
+        }
+        if let Ok(val) = env::var("AIJ_TESTLIB_DIR") {
+            self.testlib_dir = PathBuf::from(val);
         }
         if let Ok(val) = env::var("AIJ_BACKEND_HOST") {
             self.backend_host = val;

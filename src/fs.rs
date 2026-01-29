@@ -59,7 +59,7 @@ pub(crate) struct Problem {
 }
 
 pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
-    let problem_info = ProblemInfo::from_pid(pid).await?.apply_defaults();
+    let problem_info = ProblemInfo::from_pid(pid).await?;
     if problem_info.test_case_number.is_none() {
         return Err(crate::error::AijError::FileSystem(format!(
             "Problem {} is missing test case number info",
@@ -95,14 +95,14 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
 }
 
 pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {
-    let file_path = get_path_by_id_name(pid, filename).await?;
-    read_file_to_string(file_path).await
+    let file_path = get_path_by_id_name(pid, filename, true).await?;
+    get_text_by_path(file_path, None).await
 }
 
-pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<PathBuf> {
-    let fs = FileSystem::get().await?;
-    let file_path = fs.base_path.join(pid).join(filename);
-    if !file_path.exists() {
+pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str, check: bool) -> Result<PathBuf> {
+    let problem_dir = get_dir_by_problem_id(pid, !check).await?;
+    let file_path = problem_dir.join(filename);
+    if check && !file_path.exists() {
         return Err(crate::error::AijError::FileSystem(format!(
             "File does not exist: {}",
             file_path.to_string_lossy()
@@ -111,17 +111,20 @@ pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<Pat
     Ok(file_path)
 }
 
+pub(crate) async fn get_dir_by_problem_id(pid: &str, create: bool) -> Result<PathBuf> {
+    let fs = FileSystem::get().await?;
+    let dir_path = fs.base_path.join(pid);
+    if create && !dir_path.exists() {
+        create_dir_all(&dir_path).await?;
+    }
+    Ok(dir_path)
+}
+
 pub(crate) async fn get_dir_by_submission_id(submission_id: &str) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
     let dir_path = fs.base_path.join("submissions").join(submission_id);
     if !dir_path.exists() {
-        tokio::fs::create_dir_all(&dir_path).await.map_err(|e| {
-            crate::error::AijError::FileSystem(format!(
-                "Failed to create directories for {}: {}",
-                dir_path.to_string_lossy(),
-                e
-            ))
-        })?;
+        create_dir_all(&dir_path).await?;
     }
     Ok(dir_path)
 }
@@ -159,14 +162,40 @@ pub(crate) async fn get_text_by_path(
             .map_err(|e| crate::error::AijError::FileSystem(format!("Read error: {}", e)))?;
         Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
     } else {
-        read_file_to_string(path).await
+        tokio::fs::read_to_string(path.as_ref()).await.map_err(|e| {
+            crate::error::AijError::FileSystem(format!(
+                "Failed to read file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ))
+        })
     }
 }
 
-pub(crate) async fn read_file_to_string(path: impl AsRef<Path>) -> Result<String> {
-    tokio::fs::read_to_string(path.as_ref()).await.map_err(|e| {
+pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
+    tokio::fs::create_dir_all(path.as_ref()).await.map_err(|e| {
         crate::error::AijError::FileSystem(format!(
-            "Failed to read file {}: {}",
+            "Failed to create directories for {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })
+}
+
+pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> Result<()> {
+    tokio::fs::write(path.as_ref(), content).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to write to file {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })
+}
+
+pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
+    tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to remove file {}: {}",
             path.as_ref().to_string_lossy(),
             e
         ))
