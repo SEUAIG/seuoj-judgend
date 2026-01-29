@@ -3,12 +3,13 @@
 mod edit_problem_by_id;
 mod get_problem_by_id;
 mod judge_problem_by_id;
+mod upload_problem_data;
 
 use crate::config::AijConfig;
-use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
+use axum::Json;
 use serde_json::json;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
@@ -17,13 +18,14 @@ use tracing::error;
 pub(crate) use edit_problem_by_id::edit_problem_by_id;
 pub(crate) use get_problem_by_id::get_problem_by_id;
 pub(crate) use judge_problem_by_id::judge_problem_by_id;
+pub(crate) use upload_problem_data::upload_problem_data;
 
 /// Custom extractor for JSON with custom error handling
 pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    Json<T>: FromRequest<S, Rejection=JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);

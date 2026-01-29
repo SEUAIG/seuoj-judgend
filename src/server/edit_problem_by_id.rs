@@ -108,14 +108,8 @@ pub(crate) async fn edit_problem_by_id(
 ) -> Result<impl IntoResponse> {
     let problem_id = &payload.pid;
     info!("Received edit problem request: pid={}", problem_id,);
-
-    let problem_dir = fs::get_dir_by_problem_id(problem_id, false).await?;
-    let is_new = if problem_dir.exists() {
-        false
-    } else {
-        fs::create_dir_all(problem_id).await?;
-        true
-    };
+    let info_path = fs::get_path_by_id_name(problem_id, "info.json", false).await?;
+    let is_new = !info_path.exists();
     if is_new {
         info!("Creating new problem with id: {}", &problem_id);
         payload.is_complete().map_err(|e| {
@@ -167,7 +161,6 @@ pub(crate) async fn edit_problem_by_id(
         }
     }
     if let Some(info) = payload.info {
-        let path = fs::get_path_by_id_name(problem_id, "info.json", false).await?;
         let info = if is_new {
             info
         } else {
@@ -182,7 +175,7 @@ pub(crate) async fn edit_problem_by_id(
             );
             crate::error::AijError::Server(format!("Failed to serialize problem info: {}", e))
         })?;
-        fs::write_to_file(&path, &info_json).await?;
+        fs::write_to_file(&info_path, &info_json).await?;
     }
     if let Some(interactor) = &payload.interactor {
         match interactor.r#type {

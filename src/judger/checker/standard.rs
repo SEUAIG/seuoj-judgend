@@ -1,11 +1,15 @@
 use crate::error::Result;
 use crate::fs::get_text_by_path;
 use std::path::Path;
+use tracing::info;
+
 pub(crate) async fn standard_checker(
+    problem_id: impl AsRef<str>,
     output_path: impl AsRef<Path>,
     ans_path: impl AsRef<Path>,
 ) -> Result<(bool, String)> {
     {
+        info!("Using standard checker for problem {}", problem_id.as_ref());
         let out = get_text_by_path(output_path, None).await?;
         let ans = get_text_by_path(ans_path, None).await?;
         Ok(standard_checker_str(&out, &ans).await)
