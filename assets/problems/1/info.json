@@ -1,5 +1,6 @@
 {
   "test_case_number": 1,
   "problem_type": "Standard",
+  "checker_type": "Special",
   "max_memory_byte": 1073741824
 }

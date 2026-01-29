@@ -24,4 +24,5 @@ int main(int argc, char *argv[]) {
             quitf(_wa, "Query %d: expected %d, found %d", i + 1, a + b, result);
         }
     }
+    quitf(_ok, "");
 }

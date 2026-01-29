@@ -1,0 +1,67 @@
+use crate::fs::get_path_by_id_name;
+use crate::judger::utils::chmod_plus_x;
+use std::path::Path;
+use tracing::error;
+
+pub(crate) async fn special_checker(
+    problem_id: impl AsRef<str>,
+    input_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
+    ans_path: impl AsRef<Path>,
+) -> crate::error::Result<(bool, String)> {
+    {
+        let checker_path = get_path_by_id_name(problem_id.as_ref(), "checker").await?;
+        if !checker_path.exists() {
+            return Err(crate::error::AijError::Judge(format!(
+                "Checker for problem {} does not exist.",
+                problem_id.as_ref()
+            )));
+        }
+        chmod_plus_x(&checker_path).await.map_err(|e| {
+            error!(
+                "Failed to set execute permission for checker of problem {}: {}",
+                problem_id.as_ref(),
+                e
+            );
+            crate::error::AijError::Judge(format!(
+                "Failed to set execute permission for checker: {}",
+                e
+            ))
+        })?;
+
+        let output = tokio::process::Command::new(checker_path)
+            .arg(input_path.as_ref())
+            .arg(output_path.as_ref())
+            .arg(ans_path.as_ref())
+            .output()
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to execute checker of problem {}: {}",
+                    problem_id.as_ref(),
+                    e
+                );
+                crate::error::AijError::Judge(format!("Failed to execute checker: {}", e))
+            })?;
+        let checker_message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if output.status.success() {
+            Ok((true, String::new()))
+        } else {
+            Ok((false, checker_message))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_special_checker() {
+        let input_path = "assets/problems/1/1.in";
+        let output_path = "assets/problems/1/1.ans";
+        let ans_path = "assets/problems/1/1.ans";
+        let res = super::special_checker("1", input_path, output_path, ans_path)
+            .await
+            .unwrap();
+        assert!(res.0);
+    }
+}

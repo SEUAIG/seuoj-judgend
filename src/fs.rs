@@ -97,14 +97,7 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
 
 pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {
     let file_path = get_path_by_id_name(pid, filename).await?;
-    let content = tokio::fs::read_to_string(&file_path).await.map_err(|e| {
-        crate::error::AijError::FileSystem(format!(
-            "Failed to read file {}: {}",
-            file_path.to_string_lossy(),
-            e
-        ))
-    })?;
-    Ok(content)
+    read_file_to_string(file_path).await
 }
 
 pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str) -> Result<PathBuf> {
@@ -152,14 +145,14 @@ pub(crate) async fn get_text_by_path(
     path: impl AsRef<Path>,
     truncate_len: Option<usize>,
 ) -> Result<String> {
-    let mut file = tokio::fs::File::open(&path).await.map_err(|e| {
-        crate::error::AijError::FileSystem(format!(
-            "Failed to open file {}: {}",
-            path.as_ref().to_string_lossy(),
-            e
-        ))
-    })?;
     if let Some(len) = truncate_len {
+        let mut file = tokio::fs::File::open(&path).await.map_err(|e| {
+            crate::error::AijError::FileSystem(format!(
+                "Failed to open file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ))
+        })?;
         let mut buffer = vec![0u8; len];
         let n = file
             .read(&mut buffer)
@@ -167,10 +160,16 @@ pub(crate) async fn get_text_by_path(
             .map_err(|e| crate::error::AijError::FileSystem(format!("Read error: {}", e)))?;
         Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
     } else {
-        let mut content = String::new();
-        file.read_to_string(&mut content)
-            .await
-            .map_err(|e| crate::error::AijError::FileSystem(format!("Read error: {}", e)))?;
-        Ok(content)
+        read_file_to_string(path).await
     }
+}
+
+pub(crate) async fn read_file_to_string(path: impl AsRef<Path>) -> Result<String> {
+    tokio::fs::read_to_string(path.as_ref()).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to read file {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })
 }

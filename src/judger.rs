@@ -6,8 +6,10 @@ use judger::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{info, warn};
+use utils::chmod_plus_x;
 
-mod comparer;
+mod checker;
+mod utils;
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -42,6 +44,8 @@ pub(crate) struct ProblemInfo {
     pub(crate) test_case_number: i32,
     /// type of the problem
     pub(crate) problem_type: ProblemType,
+    /// type of the checker
+    pub(crate) checker_type: CheckerType,
 }
 
 /// Type of the problem
@@ -51,6 +55,15 @@ pub(crate) enum ProblemType {
     Standard,
     /// Interactive problem
     Interactive,
+}
+
+/// Type of the checker
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum CheckerType {
+    /// Standard
+    Standard,
+    /// Special judge
+    Special,
 }
 
 impl Display for ProblemType {
@@ -258,6 +271,13 @@ pub(crate) async fn judge(
                         path.to_string_lossy()
                     )));
                 }
+                chmod_plus_x(&path).await.map_err(|e| {
+                    AijError::FileSystem(format!(
+                        "Failed to set execute permission for interactor {}: {}",
+                        path.to_string_lossy(),
+                        e
+                    ))
+                })?;
                 path
             }),
         };
@@ -278,8 +298,14 @@ pub(crate) async fn judge(
             judger::ErrorCode::Success => {
                 let mut result = ("Accepted".to_string(), "Accepted");
                 if problem_info.problem_type != ProblemType::Interactive {
-                    let (res, detail) =
-                        comparer::standard_comparer(&config.output_path, &ans_path).await?;
+                    let (res, detail) = checker::check(
+                        &pid,
+                        &config.input_path,
+                        &config.output_path,
+                        &ans_path,
+                        problem_info.checker_type,
+                    )
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
