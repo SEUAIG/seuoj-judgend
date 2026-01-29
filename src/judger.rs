@@ -154,7 +154,12 @@ pub(crate) async fn judge(
     let mut out_vec = vec![];
     let test_case_number = problem_info
         .test_case_number
-        .ok_or_else(|| AijError::Judge("Test case number is not specified".to_string()))?;
+        .ok_or_else(|| {
+            AijError::Judge(format!(
+                "Test case number is not specified for problem `{}` (expected in info.json)",
+                pid
+            ))
+        })?;
     for i in 1..=test_case_number {
         let input_path = get_path_by_id_name(&pid, &format!("{}.in", i)).await?;
         let ans_path = match problem_info.problem_type {

@@ -20,7 +20,7 @@ pub(crate) struct ProblemInfo {
     /// Maximum output size in bytes (-1 for unlimited).
     pub(crate) max_output_size: Option<i64>,
     /// Number of test cases
-    pub(crate) test_case_number: Option<u8>,
+    pub(crate) test_case_number: Option<i32>,
     /// type of the problem
     pub(crate) problem_type: ProblemType,
     /// type of the checker
@@ -66,7 +66,7 @@ impl ProblemInfo {
         Ok(info)
     }
 
-    pub(crate) fn unwrap_inner_options(mut self) -> Self {
+    pub(crate) fn apply_defaults(mut self) -> Self {
         if self.max_cpu_time_ms.is_none() {
             self.max_cpu_time_ms = Some(1000);
         }

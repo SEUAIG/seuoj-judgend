@@ -59,7 +59,7 @@ pub(crate) struct Problem {
 }
 
 pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
-    let problem_info = ProblemInfo::from_pid(pid).await?.unwrap_inner_options();
+    let problem_info = ProblemInfo::from_pid(pid).await?.apply_defaults();
     if problem_info.test_case_number.is_none() {
         return Err(crate::error::AijError::FileSystem(format!(
             "Problem {} is missing test case number info",
