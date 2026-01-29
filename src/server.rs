@@ -1,5 +1,6 @@
 //! Server-related functionalities for the AI Judge system.
 use crate::config::AijConfig;
+use crate::error::AijError::Judge;
 use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
 use crate::judger::{JudgeResult, SupportedLanguages, judge};
 use axum::Json;
@@ -64,14 +65,25 @@ pub(crate) async fn judge_problem_by_id(
     tokio::spawn(async move {
         let semaphore = get_judge_semaphore().await;
         let sem = semaphore.acquire().await;
-        let res = judge(
-            payload.problem_id,
-            payload.code,
-            payload.language,
-            payload.submission_id.clone(),
-        )
-        .await;
-        drop(sem);
+        let res = if let Ok(permit) = sem {
+            let res = judge(
+                payload.problem_id,
+                payload.code,
+                payload.language,
+                payload.submission_id.clone(),
+            )
+            .await;
+            drop(permit);
+            res
+        } else {
+            let message = format!(
+                "Failed to acquire semaphore for submission_id={}",
+                &payload.submission_id
+            );
+            error!("{}", message);
+            Err(Judge(message))
+        };
+
         if !AijConfig::get().save_submissions
             && let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await
         {
