@@ -1,0 +1,9 @@
+listen_addr = "0.0.0.0"
+listen_port = 9090
+max_concurrent_requests = 6
+problems_dir = "./assets/problems/"
+log_dir = "./assets/logs/"
+backend_host = "127.0.0.1"
+backend_port = 4523
+backend_prefix = "/m1/7556929-7294366-default"
+save_submissions = false
