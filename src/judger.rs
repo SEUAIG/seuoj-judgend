@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{info, warn};
 
-mod comparer;
+mod checker;
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -42,6 +42,8 @@ pub(crate) struct ProblemInfo {
     pub(crate) test_case_number: i32,
     /// type of the problem
     pub(crate) problem_type: ProblemType,
+    /// type of the checker
+    pub(crate) checker_type: CheckerType,
 }
 
 /// Type of the problem
@@ -51,6 +53,15 @@ pub(crate) enum ProblemType {
     Standard,
     /// Interactive problem
     Interactive,
+}
+
+/// Type of the checker
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum CheckerType {
+    /// Standard
+    Standard,
+    /// Special judge
+    Special,
 }
 
 impl Display for ProblemType {
@@ -278,8 +289,14 @@ pub(crate) async fn judge(
             judger::ErrorCode::Success => {
                 let mut result = ("Accepted".to_string(), "Accepted");
                 if problem_info.problem_type != ProblemType::Interactive {
-                    let (res, detail) =
-                        comparer::standard_comparer(&config.output_path, &ans_path).await?;
+                    let (res, detail) = checker::check(
+                        &pid,
+                        &config.input_path,
+                        &config.output_path,
+                        &ans_path,
+                        problem_info.checker_type,
+                    )
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
