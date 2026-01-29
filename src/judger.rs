@@ -165,7 +165,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
