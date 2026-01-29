@@ -6,8 +6,10 @@ use judger::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{info, warn};
+use utils::chmod_plus_x;
 
 mod checker;
+mod utils;
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -269,6 +271,13 @@ pub(crate) async fn judge(
                         path.to_string_lossy()
                     )));
                 }
+                chmod_plus_x(&path).await.map_err(|e| {
+                    AijError::FileSystem(format!(
+                        "Failed to set execute permission for interactor {}: {}",
+                        path.to_string_lossy(),
+                        e
+                    ))
+                })?;
                 path
             }),
         };

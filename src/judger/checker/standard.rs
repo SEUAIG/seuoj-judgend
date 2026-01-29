@@ -64,7 +64,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_standard_comparer_str() {
+    async fn test_standard_checker_str() {
         let output = "Hello, World!  \nThis is a test.\n\n";
         let answer = "Hello, World!\nThis is a test.";
         assert!(standard_checker_str(output, answer).await.0);
