@@ -20,8 +20,8 @@
 - `example_{num}.md`: 第num个示例说明文件
 - `{num}.in`: 测试点num的输入文件
 - `{num}.ans`: 测试点num的答案文件
-- `interactor`: 交互器程序（可选，仅交互式题目需要，存储形式为二进制，用户上传形式为源代码）
-- `checker`: 检查器程序（可选，仅特殊检查器需要，存储形式为二进制，用户上传形式为源代码）
+- `interactor`: 交互器程序（可选，仅交互式题目需要，存储形式为二进制，用户上传形式为源代码/二进制）
+- `checker`: 检查器程序（可选，仅特殊检查器需要，存储形式为二进制，用户上传形式为源代码/二进制）
 
 ### 针对交互题的额外说明
 
@@ -38,9 +38,19 @@
 检查器正常退出则认为AC，非正常退出则认为WA（错误信息取stderr）。
 检查器参考[Checkers with testlib.h](https://codeforces.com/blog/entry/18431)。
 
-### TODO
+### 编写交互器和检查器的额外说明
 
-- 题目上传与检查
+对于二进制上传方式，你需要自行编译交互器和检查器为可执行文件并上传。
+
+**建议使用源代码上传方式**
+
+对于源代码上传方式，建议使用 testlib 库编写交互器和检查器。另外，我们提供一个优化的 testlib
+库版本，位于 [aijlib](https://github.com/SEUAIG/aijlib)，其中包含了一些常用的功能函数，你可以通过 `#include "aijlib.h"`
+来使用该库。
+
+评测机使用的编译指令为 `g++ /path/to/source.cpp -o /path/to/output -O2 -static -std=c++23 -I/path/to/testlib`。
+
+### TODO
 
 ## 环境变量说明
 
