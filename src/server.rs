@@ -1,153 +1,22 @@
 //! Server-related functionalities for the AI Judge system.
+
+mod edit_problem_by_id;
+mod get_problem_by_id;
+mod judge_problem_by_id;
+
 use crate::config::AijConfig;
-use crate::error::AijError::Judge;
-use crate::fs::{delete_dir_by_submission_id, read_problem_by_id};
-use crate::judger::{JudgeResult, SupportedLanguages, judge};
 use axum::Json;
-use axum::extract::Path;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use reqwest::Client;
-use serde::Deserialize;
 use serde_json::json;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
-use tracing::{error, info, warn};
+use tracing::error;
 
-pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoResponse {
-    info!("Received request for problem ID: {}", id);
-    let content = read_problem_by_id(&id).await;
-    match content {
-        Ok(content) => {
-            info!("Successfully retrieved problem ID: {}", id);
-            Json(json!({
-                "code": 0,
-                "message": "Success",
-                "data": content,
-            }))
-            .into_response()
-        }
-        Err(e) => {
-            warn!("Error retrieving problem ID {}: {}", id, e);
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({
-                    "code": -1,
-                    "message": format!("Error retrieving problem: {}", e),
-                })),
-            )
-                .into_response()
-        }
-    }
-}
-
-#[derive(Deserialize)]
-pub(crate) struct JudgeRequest {
-    #[serde(rename = "submissionId")]
-    pub(crate) submission_id: String,
-    #[serde(rename = "pid")]
-    pub(crate) problem_id: String,
-    #[serde(rename = "code")]
-    pub(crate) code: String,
-    #[serde(rename = "language")]
-    pub(crate) language: SupportedLanguages,
-}
-
-pub(crate) async fn judge_problem_by_id(
-    AppJson(payload): AppJson<JudgeRequest>,
-) -> impl IntoResponse {
-    info!(
-        "Received judge request: submission_id={}, problem_id={}, language={:?}",
-        &payload.submission_id, &payload.problem_id, &payload.language
-    );
-    tokio::spawn(async move {
-        let semaphore = get_judge_semaphore().await;
-        let sem = semaphore.acquire().await;
-        let res = if let Ok(permit) = sem {
-            let res = judge(
-                payload.problem_id,
-                payload.code,
-                payload.language,
-                payload.submission_id.clone(),
-            )
-            .await;
-            drop(permit);
-            res
-        } else {
-            let message = format!(
-                "Failed to acquire semaphore for submission_id={}",
-                &payload.submission_id
-            );
-            error!("{}", message);
-            Err(Judge(message))
-        };
-
-        if !AijConfig::get().save_submissions
-            && let Err(e) = delete_dir_by_submission_id(&payload.submission_id).await
-        {
-            warn!(
-                "Failed to delete submission files for submission_id={}: {}",
-                &payload.submission_id, e
-            );
-        }
-
-        let server_addr = match AijConfig::get_backend_base_addr() {
-            Ok(addr) => {
-                format!("{}/judge/submission/{}", addr, &payload.submission_id)
-            }
-            Err(e) => {
-                error!("Failed to get backend base address for reporting: {}", e);
-                return;
-            }
-        };
-        let json_content = match res {
-            Ok(result) => {
-                info!("Judging completed: {:?}", result);
-                match result {
-                    JudgeResult::CompileError(s) => json!({
-                        "status": "CompileError",
-                        "errorDetail": s,
-                    }),
-                    JudgeResult::MaybeError(vec) => json!({
-                        "status": "Success",
-                        "resultDetail": vec,
-                    }),
-                }
-            }
-            Err(e) => json!({
-                "status": "JudgendError",
-                "errorDetail": format!("Judging failed: {}", e),
-            }),
-        };
-        info!(
-            "Reporting result to backend for submission_id={}: {}",
-            &payload.submission_id, json_content
-        );
-        let client = Client::new();
-        match client.put(&server_addr).json(&json_content).send().await {
-            Ok(resp) => {
-                info!(
-                    "Reported result to backend for submission_id={}: response_status={}",
-                    &payload.submission_id,
-                    resp.status()
-                );
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to report result to backend for submission_id={}: {}",
-                    &payload.submission_id, e
-                );
-            }
-        }
-    });
-    let response = json!({
-        "code": 0,
-        "message": "Success",
-    });
-    Json(response)
-}
+pub(crate) use edit_problem_by_id::edit_problem_by_id;
+pub(crate) use get_problem_by_id::get_problem_by_id;
+pub(crate) use judge_problem_by_id::judge_problem_by_id;
 
 /// Custom extractor for JSON with custom error handling
 pub(crate) struct AppJson<T>(pub T);

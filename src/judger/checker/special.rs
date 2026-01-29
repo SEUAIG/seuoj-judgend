@@ -10,13 +10,7 @@ pub(crate) async fn special_checker(
     ans_path: impl AsRef<Path>,
 ) -> crate::error::Result<(bool, String)> {
     {
-        let checker_path = get_path_by_id_name(problem_id.as_ref(), "checker").await?;
-        if !checker_path.exists() {
-            return Err(crate::error::AijError::Judge(format!(
-                "Checker for problem {} does not exist.",
-                problem_id.as_ref()
-            )));
-        }
+        let checker_path = get_path_by_id_name(problem_id.as_ref(), "checker", true).await?;
         chmod_plus_x(&checker_path).await.map_err(|e| {
             error!(
                 "Failed to set execute permission for checker of problem {}: {}",

@@ -4,9 +4,9 @@
 #![deny(clippy::panic)]
 //! SEU AIJ Judge-Endpoint
 
-use crate::server::{get_problem_by_id, judge_problem_by_id};
+use crate::server::{edit_problem_by_id, get_problem_by_id, judge_problem_by_id};
+use axum::routing::{get, patch, post};
 use axum::Router;
-use axum::routing::{get, post};
 
 pub mod config;
 pub mod error;
@@ -20,4 +20,5 @@ pub fn app() -> Router {
     Router::new()
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))
+        .route("/judge/problem/edit", patch(edit_problem_by_id))
 }
