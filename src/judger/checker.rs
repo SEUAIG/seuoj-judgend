@@ -2,9 +2,9 @@ mod special;
 mod standard;
 
 use crate::error::Result;
-use crate::judger::CheckerType;
 use crate::judger::checker::special::special_checker;
 use crate::judger::checker::standard::standard_checker;
+use crate::judger::utils::CheckerType;
 use std::path::Path;
 
 pub(crate) async fn check(
