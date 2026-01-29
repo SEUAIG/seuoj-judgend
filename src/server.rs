@@ -19,20 +19,26 @@ pub(crate) async fn get_problem_by_id(Path(id): Path<String>) -> impl IntoRespon
     info!("Received request for problem ID: {}", id);
     let content = read_problem_by_id(&id).await;
     match content {
-        Ok(content) => Json(json!({
-            "code": 0,
-            "message": "Success",
-            "data": content,
-        }))
-        .into_response(),
-        Err(e) => (
-            StatusCode::NOT_FOUND,
+        Ok(content) => {
+            info!("Successfully retrieved problem ID: {}", id);
             Json(json!({
-                "code": -1,
-                "message": format!("Error retrieving problem: {}", e),
-            })),
-        )
-            .into_response(),
+                "code": 0,
+                "message": "Success",
+                "data": content,
+            }))
+            .into_response()
+        }
+        Err(e) => {
+            warn!("Error retrieving problem ID {}: {}", id, e);
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "code": -1,
+                    "message": format!("Error retrieving problem: {}", e),
+                })),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -145,11 +151,15 @@ where
         match Json::<T>::from_request(req, state).await {
             Ok(Json(value)) => Ok(Self(value)),
             Err(rejection) => {
-                let response = json!({
-                    "code": -1,
-                    "message": format!("Invalid JSON: {}", rejection.body_text()),
-                });
-                Err((StatusCode::BAD_REQUEST, Json(response)))
+                let message = format!("JSON extraction error: {}", rejection);
+                error!("{}", message);
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "code": -1,
+                        "message": message,
+                    })),
+                ))
             }
         }
     }
