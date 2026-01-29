@@ -100,7 +100,7 @@ pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<St
 }
 
 pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str, check: bool) -> Result<PathBuf> {
-    let problem_dir = get_dir_by_problem_id(pid, true).await?;
+    let problem_dir = get_dir_by_problem_id(pid, !check).await?;
     let file_path = problem_dir.join(filename);
     if check && !file_path.exists() {
         return Err(crate::error::AijError::FileSystem(format!(
@@ -186,6 +186,16 @@ pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u
     tokio::fs::write(path.as_ref(), content).await.map_err(|e| {
         crate::error::AijError::FileSystem(format!(
             "Failed to write to file {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })
+}
+
+pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
+    tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to remove file {}: {}",
             path.as_ref().to_string_lossy(),
             e
         ))

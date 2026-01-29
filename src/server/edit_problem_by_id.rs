@@ -161,21 +161,13 @@ pub(crate) async fn edit_problem_by_id(
         }
     }
     if let Some(info) = payload.info {
-        let info = if is_new {
+        if is_new {
             info
         } else {
             let mut problem_info = ProblemInfo::from_pid(problem_id).await?;
             problem_info.update_from_option(&info);
             problem_info
-        };
-        let info_json = serde_json::to_string_pretty(&info).map_err(|e| {
-            error!(
-                "Failed to serialize problem info for problem id {}: {}",
-                problem_id, e
-            );
-            crate::error::AijError::Server(format!("Failed to serialize problem info: {}", e))
-        })?;
-        fs::write_to_file(&info_path, &info_json).await?;
+        }.save(problem_id).await?;
     }
     if let Some(interactor) = &payload.interactor {
         match interactor.r#type {

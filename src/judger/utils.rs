@@ -1,5 +1,7 @@
 use crate::config::AijConfig;
 use crate::error::AijError;
+use crate::error::Result;
+use crate::fs;
 use judger::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -150,6 +152,18 @@ impl ProblemInfo {
         if other.checker_type.is_some() {
             self.checker_type = other.checker_type;
         }
+    }
+
+    pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
+        let info_json = serde_json::to_string_pretty(&self).map_err(|e| {
+            error!(
+                "Failed to serialize problem info for problem id {}: {}",
+                pid.as_ref(), e
+            );
+            AijError::Server(format!("Failed to serialize problem info: {}", e))
+        })?;
+        let info_path = fs::get_path_by_id_name(pid.as_ref(), "info.json", false).await?;
+        fs::write_to_file(&info_path, &info_json).await
     }
 }
 
