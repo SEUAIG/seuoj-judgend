@@ -4,10 +4,12 @@
 #![deny(clippy::panic)]
 //! SEU AIJ Judge-Endpoint
 
-use crate::server::{edit_problem_by_id, get_problem_by_id, judge_problem_by_id, upload_problem_data};
+use crate::server::{
+    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, upload_problem_data,
+};
+use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post};
-use axum::Router;
 
 pub mod config;
 pub mod error;

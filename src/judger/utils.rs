@@ -158,7 +158,8 @@ impl ProblemInfo {
         let info_json = serde_json::to_string_pretty(&self).map_err(|e| {
             error!(
                 "Failed to serialize problem info for problem id {}: {}",
-                pid.as_ref(), e
+                pid.as_ref(),
+                e
             );
             AijError::Server(format!("Failed to serialize problem info: {}", e))
         })?;
@@ -210,7 +211,11 @@ pub(crate) async fn compile(path: impl AsRef<Path>) -> crate::error::Result<()> 
         })?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr);
-        error!("Compilation failed for {}: {}", path.as_ref().display(), message);
+        error!(
+            "Compilation failed for {}: {}",
+            path.as_ref().display(),
+            message
+        );
         return Err(AijError::Request(format!(
             "Compilation failed for {}: {}",
             path.as_ref().display(),

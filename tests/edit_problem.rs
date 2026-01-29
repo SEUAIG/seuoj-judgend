@@ -2,8 +2,8 @@ use aij_judgend::app;
 use aij_judgend::config::AijConfig;
 use aij_judgend::logger::init_logger;
 use axum_test::TestServer;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use serde_json::json;
 
 #[tokio::test]
@@ -13,7 +13,8 @@ async fn test_edit_problem() {
     let server = TestServer::new(app()).expect("Failed to create test server");
 
     let checker_path = "./assets/problems/1/checker";
-    let base64_checker = general_purpose::STANDARD.encode(std::fs::read(checker_path).expect("Failed to read checker file"));
+    let base64_checker = general_purpose::STANDARD
+        .encode(std::fs::read(checker_path).expect("Failed to read checker file"));
 
     let response = server
         .patch("/judge/problem/edit")

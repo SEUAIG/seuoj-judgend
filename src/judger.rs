@@ -2,7 +2,7 @@
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-pub(crate) use crate::judger::utils::{compile, CheckerType, ProblemInfo, ProblemType};
+pub(crate) use crate::judger::utils::{CheckerType, ProblemInfo, ProblemType, compile};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use utils::chmod_plus_x;
@@ -91,7 +91,7 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -236,7 +236,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                        .await?;
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }

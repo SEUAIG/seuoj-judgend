@@ -10,8 +10,8 @@ async fn test_upload_problem_data() {
     let _guard = init_logger(&config.log_dir);
     let server = TestServer::new(app()).expect("Failed to create test server");
 
-
-    let response = server.post("/judge/problem/data")
+    let response = server
+        .post("/judge/problem/data")
         .json(&json!({
             "pid": "1",
             "testcase": [
@@ -36,7 +36,8 @@ async fn test_upload_problem_data() {
     assert_eq!(json["code"], 0);
     assert_eq!(json["message"], "Success");
 
-    let response = server.post("/judge/problem/data")
+    let response = server
+        .post("/judge/problem/data")
         .json(&json!({
             "pid": "1",
             "testcase": [

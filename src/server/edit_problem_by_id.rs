@@ -2,10 +2,10 @@ use crate::error::Result;
 use crate::fs;
 use crate::judger::{CheckerType, ProblemInfo, ProblemType};
 use crate::server::AppJson;
-use axum::response::IntoResponse;
 use axum::Json;
-use base64::engine::general_purpose;
+use axum::response::IntoResponse;
 use base64::Engine;
+use base64::engine::general_purpose;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -137,7 +137,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.in", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, r#in).await?;
             }
             if let Some(ans) = &sample.ans {
@@ -146,7 +146,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.ans", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, ans).await?;
             }
             if let Some(description) = &sample.description {
@@ -155,7 +155,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.md", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, description).await?;
             }
         }
@@ -167,7 +167,9 @@ pub(crate) async fn edit_problem_by_id(
             let mut problem_info = ProblemInfo::from_pid(problem_id).await?;
             problem_info.update_from_option(&info);
             problem_info
-        }.save(problem_id).await?;
+        }
+        .save(problem_id)
+        .await?;
     }
     if let Some(interactor) = &payload.interactor {
         match interactor.r#type {
