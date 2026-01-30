@@ -195,6 +195,16 @@ pub(crate) async fn get_text_by_path(
     }
 }
 
+pub(crate) async fn get_raw_by_path(path: impl AsRef<Path>) -> Result<Vec<u8>> {
+    tokio::fs::read(path.as_ref()).await.map_err(|e| {
+        crate::error::AijError::FileSystem(format!(
+            "Failed to read file {}: {}",
+            path.as_ref().to_string_lossy(),
+            e
+        ))
+    })
+}
+
 pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
     tokio::fs::create_dir_all(path.as_ref()).await.map_err(|e| {
         crate::error::AijError::FileSystem(format!(
