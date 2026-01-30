@@ -2,10 +2,10 @@ use crate::config::AijConfig;
 use crate::error::AijError::Judge;
 use crate::error::Result;
 use crate::fs::delete_dir_by_submission_id;
-use crate::judger::{judge, JudgeResult, ProblemInfo, SupportedLanguages};
-use crate::server::{get_judge_semaphore, AppJson};
-use axum::response::IntoResponse;
+use crate::judger::{JudgeResult, ProblemCase, SupportedLanguages, judge};
+use crate::server::{AppJson, get_judge_semaphore};
 use axum::Json;
+use axum::response::IntoResponse;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
@@ -30,12 +30,11 @@ pub(crate) async fn judge_problem_by_id(
         "Received judge request: submission_id={}, problem_id={}, language={:?}",
         &payload.submission_id, &payload.problem_id, &payload.language
     );
-    let problem_info = ProblemInfo::from_pid(&payload.problem_id).await?;
-    if problem_info.test_case_number == Some(0) {
-        return Err(Judge(format!(
-            "Problem {} has no test cases.",
-            &payload.problem_id
-        )));
+    let case_info = ProblemCase::from_pid(&payload.problem_id).await?;
+    if case_info.is_empty() {
+        let message = format!("Problem {} has no test cases.", &payload.problem_id);
+        error!("{}", message);
+        return Err(Judge(message));
     }
     tokio::spawn(async move {
         let semaphore = get_judge_semaphore().await;
@@ -47,7 +46,7 @@ pub(crate) async fn judge_problem_by_id(
                 payload.language,
                 payload.submission_id.clone(),
             )
-                .await;
+            .await;
             drop(permit);
             res
         } else {

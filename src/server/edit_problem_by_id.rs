@@ -1,11 +1,12 @@
 use crate::error::Result;
 use crate::fs;
-use crate::judger::{CheckerType, ProblemInfo, ProblemType};
+use crate::fs::check_problem_exists;
+use crate::judger::{CheckerType, ProblemCase, ProblemInfo, ProblemType};
 use crate::server::AppJson;
-use axum::response::IntoResponse;
 use axum::Json;
-use base64::engine::general_purpose;
+use axum::response::IntoResponse;
 use base64::Engine;
+use base64::engine::general_purpose;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -48,7 +49,7 @@ struct OptionSample {
 
 impl OptionProblem {
     /// Check if all fields are not None
-    pub(crate) fn is_complete(&self) -> std::result::Result<(), String> {
+    pub(crate) fn check_complete(&self) -> std::result::Result<(), String> {
         if self.description.is_none() {
             warn!("Description is missing for problem id: {}", self.pid);
             return Err("Description is missing".to_string());
@@ -91,11 +92,8 @@ impl OptionProblem {
                 );
                 return Err("Checker program is missing for special judge problem".to_string());
             }
-            Ok(())
-        } else {
-            warn!("Problem info is missing for problem id: {}", self.pid);
-            Err("Problem info is missing".to_string())
         }
+        Ok(())
     }
 }
 
@@ -104,11 +102,10 @@ pub(crate) async fn edit_problem_by_id(
 ) -> Result<impl IntoResponse> {
     let problem_id = &payload.pid;
     info!("Received edit problem request: pid={}", problem_id,);
-    let info_path = fs::get_path_by_id_name(problem_id, "info.json", false).await?;
-    let is_new = !info_path.exists();
+    let is_new = !check_problem_exists(problem_id).await?;
     if is_new {
         info!("Creating new problem with id: {}", &problem_id);
-        payload.is_complete().map_err(|e| {
+        payload.check_complete().map_err(|e| {
             error!("Invalid payload for new problem id {}: {}", problem_id, e);
             crate::error::AijError::Request(format!("Invalid payload for new problem: {}", e))
         })?;
@@ -133,7 +130,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.in", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, r#in).await?;
             }
             if let Some(ans) = &sample.ans {
@@ -142,7 +139,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.ans", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, ans).await?;
             }
             if let Some(description) = &sample.description {
@@ -151,7 +148,7 @@ pub(crate) async fn edit_problem_by_id(
                     &format!("example_{}.md", index + 1),
                     false,
                 )
-                    .await?;
+                .await?;
                 fs::write_to_file(&path, description).await?;
             }
         }
@@ -164,8 +161,8 @@ pub(crate) async fn edit_problem_by_id(
             problem_info.update_from_option(&info);
             problem_info
         }
-            .save(problem_id)
-            .await?;
+        .save(problem_id)
+        .await?;
     }
     if let Some(interactor) = &payload.interactor {
         match interactor.r#type {
@@ -217,6 +214,11 @@ pub(crate) async fn edit_problem_by_id(
             }
         }
     }
+
+    let case_info = ProblemCase::default();
+    case_info.save(problem_id).await?;
+    info!("Created default case info for problem id: {}", problem_id);
+
     info!(
         "Successfully {} problem with id: {}",
         if is_new { "created" } else { "edited" },

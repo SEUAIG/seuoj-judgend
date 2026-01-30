@@ -1,7 +1,7 @@
 //! File system operations for reading and writing problem and submission data.
 use crate::config::AijConfig;
 use crate::error::Result;
-use crate::judger::ProblemInfo;
+use crate::judger::{ProblemCase, ProblemInfo};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
@@ -39,6 +39,16 @@ impl FileSystem {
     }
 }
 
+/// Test case input/output pair for a problem.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Case {
+    pub(crate) id: usize,
+    pub(crate) r#in: Option<String>,
+    pub(crate) in_name: String,
+    pub(crate) ans: Option<String>,
+    pub(crate) ans_name: Option<String>,
+}
+
 /// Sample input/output pair for a problem.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Sample {
@@ -56,23 +66,25 @@ pub(crate) struct Problem {
     pub(crate) output: String,
     pub(crate) example: Vec<Sample>,
     pub(crate) info: ProblemInfo,
+    pub(crate) case: ProblemCase,
 }
 
-pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
-    let problem_info = ProblemInfo::from_pid(pid).await?;
-    if problem_info.test_case_number.is_none() {
+pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<Problem> {
+    let problem_info = ProblemInfo::from_pid(&pid).await?;
+    let case_info = ProblemCase::from_pid(&pid).await?;
+    if case_info.is_empty() {
         return Err(crate::error::AijError::FileSystem(format!(
-            "Problem {} is missing test case number info",
-            pid
+            "Problem {} has no test cases",
+            pid.as_ref()
         )));
     }
     let mut example = vec![];
     let mut sample_index = 1;
-    while let Ok(r#in) = read_file_by_id_name(pid, &format!("example_{}.in", sample_index)).await {
-        let ans = read_file_by_id_name(pid, &format!("example_{}.ans", sample_index))
+    while let Ok(r#in) = read_file_by_id_name(&pid, &format!("example_{}.in", sample_index)).await {
+        let ans = read_file_by_id_name(&pid, &format!("example_{}.ans", sample_index))
             .await
             .unwrap_or_default();
-        let description = read_file_by_id_name(pid, &format!("example_{}.md", sample_index))
+        let description = read_file_by_id_name(&pid, &format!("example_{}.md", sample_index))
             .await
             .unwrap_or_default();
         example.push(Sample {
@@ -83,25 +95,33 @@ pub(crate) async fn read_problem_by_id(pid: &str) -> Result<Problem> {
         sample_index += 1;
     }
     Ok(Problem {
-        pid: pid.to_string(),
-        description: read_file_by_id_name(pid, "description.md").await?,
-        input: read_file_by_id_name(pid, "input.md").await?,
-        output: read_file_by_id_name(pid, "output.md")
+        pid: pid.as_ref().to_string(),
+        description: read_file_by_id_name(&pid, "description.md").await?,
+        input: read_file_by_id_name(&pid, "input.md").await?,
+        output: read_file_by_id_name(&pid, "output.md")
             .await
             .unwrap_or_default(),
         example,
         info: problem_info,
+        case: case_info,
     })
 }
 
-pub(crate) async fn read_file_by_id_name(pid: &str, filename: &str) -> Result<String> {
+pub(crate) async fn read_file_by_id_name(
+    pid: impl AsRef<str>,
+    filename: impl AsRef<str>,
+) -> Result<String> {
     let file_path = get_path_by_id_name(pid, filename, true).await?;
     get_text_by_path(file_path, None).await
 }
 
-pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str, check: bool) -> Result<PathBuf> {
-    let problem_dir = get_dir_by_problem_id(pid, !check).await?;
-    let file_path = problem_dir.join(filename);
+pub(crate) async fn get_path_by_id_name(
+    pid: impl AsRef<str>,
+    filename: impl AsRef<str>,
+    check: bool,
+) -> Result<PathBuf> {
+    let problem_dir = get_dir_by_problem_id(pid, false).await?;
+    let file_path = problem_dir.join(filename.as_ref());
     if check && !file_path.exists() {
         return Err(crate::error::AijError::FileSystem(format!(
             "File does not exist: {}",
@@ -111,25 +131,28 @@ pub(crate) async fn get_path_by_id_name(pid: &str, filename: &str, check: bool) 
     Ok(file_path)
 }
 
-pub(crate) async fn get_dir_by_problem_id(pid: &str, create: bool) -> Result<PathBuf> {
+pub(crate) async fn get_dir_by_problem_id(pid: impl AsRef<str>, create: bool) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
-    let dir_path = fs.base_path.join(pid);
+    let dir_path = fs.base_path.join(pid.as_ref());
     if create && !dir_path.exists() {
         create_dir_all(&dir_path).await?;
     }
     Ok(dir_path)
 }
 
-pub(crate) async fn get_dir_by_submission_id(submission_id: &str) -> Result<PathBuf> {
+pub(crate) async fn get_dir_by_submission_id(submission_id: impl AsRef<str>) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
-    let dir_path = fs.base_path.join("submissions").join(submission_id);
+    let dir_path = fs
+        .base_path
+        .join("submissions")
+        .join(submission_id.as_ref());
     if !dir_path.exists() {
         create_dir_all(&dir_path).await?;
     }
     Ok(dir_path)
 }
 
-pub(crate) async fn delete_dir_by_submission_id(submission_id: &str) -> Result<()> {
+pub(crate) async fn delete_dir_by_submission_id(submission_id: impl AsRef<str>) -> Result<()> {
     let dir_path = get_dir_by_submission_id(submission_id).await?;
     if dir_path.exists() {
         tokio::fs::remove_dir_all(&dir_path).await.map_err(|e| {
@@ -183,6 +206,11 @@ pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
 }
 
 pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> Result<()> {
+    if let Some(parent) = path.as_ref().parent()
+        && !parent.exists()
+    {
+        create_dir_all(parent).await?;
+    }
     tokio::fs::write(path.as_ref(), content).await.map_err(|e| {
         crate::error::AijError::FileSystem(format!(
             "Failed to write to file {}: {}",
@@ -193,6 +221,9 @@ pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u
 }
 
 pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
+    if !path.as_ref().exists() {
+        return Ok(());
+    }
     tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
         crate::error::AijError::FileSystem(format!(
             "Failed to remove file {}: {}",
@@ -200,4 +231,9 @@ pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
             e
         ))
     })
+}
+
+pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
+    let problem_dir = get_dir_by_problem_id(pid, false).await?;
+    Ok(problem_dir.exists())
 }
