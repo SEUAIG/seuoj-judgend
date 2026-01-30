@@ -84,7 +84,7 @@ impl ProblemInfo {
             self.max_stack_byte = Some(32 * 1024 * 1024);
         }
         if self.max_process_number.is_none() {
-            self.max_process_number = Some(1);
+            self.max_process_number = Some(0);
         }
         if self.max_output_size.is_none() {
             self.max_output_size = Some(1000000);
