@@ -3,6 +3,7 @@
 mod edit_problem_by_id;
 mod get_problem_by_id;
 mod judge_problem_by_id;
+mod serve_problem_file;
 mod upload_problem_data;
 
 use crate::config::AijConfig;
@@ -18,6 +19,7 @@ use tracing::error;
 pub(crate) use edit_problem_by_id::edit_problem_by_id;
 pub(crate) use get_problem_by_id::get_problem_by_id;
 pub(crate) use judge_problem_by_id::judge_problem_by_id;
+pub(crate) use serve_problem_file::serve_problem_file;
 pub(crate) use upload_problem_data::upload_problem_data;
 
 /// Custom extractor for JSON with custom error handling
