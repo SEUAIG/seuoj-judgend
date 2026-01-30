@@ -5,7 +5,6 @@
   "max_stack_byte": 33554432,
   "max_process_number": 1,
   "max_output_size": 1000000,
-  "test_case_number": 1,
   "problem_type": "Standard",
   "checker_type": "Special"
 }

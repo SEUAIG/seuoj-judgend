@@ -2,6 +2,7 @@ use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
 use crate::fs;
+use crate::fs::Case;
 use judger::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -23,8 +24,6 @@ pub(crate) struct ProblemInfo {
     pub(crate) max_process_number: Option<i32>,
     /// Maximum output size in bytes (-1 for unlimited).
     pub(crate) max_output_size: Option<i64>,
-    /// Number of test cases
-    pub(crate) test_case_number: Option<i32>,
     /// type of the problem
     pub(crate) problem_type: Option<ProblemType>,
     /// type of the checker
@@ -59,12 +58,13 @@ impl Display for ProblemType {
 }
 
 impl ProblemInfo {
-    pub(crate) async fn from_pid(pid: &str) -> crate::error::Result<Self> {
-        let content = crate::fs::read_file_by_id_name(pid, "info.json").await?;
+    pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
+        let content = fs::read_file_by_id_name(&pid, "info.json").await?;
         let info: ProblemInfo = serde_json::from_str(&content).map_err(|e| {
             AijError::FileSystem(format!(
                 "Failed to parse info.json for problem {}: {}",
-                pid, e
+                pid.as_ref(),
+                e
             ))
         })?;
         Ok(info.apply_defaults())
@@ -84,13 +84,10 @@ impl ProblemInfo {
             self.max_stack_byte = Some(32 * 1024 * 1024);
         }
         if self.max_process_number.is_none() {
-            self.max_process_number = Some(0);
+            self.max_process_number = Some(1);
         }
         if self.max_output_size.is_none() {
             self.max_output_size = Some(1000000);
-        }
-        if self.test_case_number.is_none() {
-            self.test_case_number = Some(1);
         }
         if self.problem_type.is_none() {
             self.problem_type = Some(ProblemType::Standard);
@@ -143,9 +140,6 @@ impl ProblemInfo {
         if other.max_output_size.is_some() {
             self.max_output_size = other.max_output_size;
         }
-        if other.test_case_number.is_some() {
-            self.test_case_number = other.test_case_number;
-        }
         if other.problem_type.is_some() {
             self.problem_type = other.problem_type;
         }
@@ -168,6 +162,60 @@ impl ProblemInfo {
     }
 }
 
+/// A collection of problem cases
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub(crate) struct ProblemCase(pub(crate) Vec<Case>);
+
+impl ProblemCase {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
+        let content = fs::read_file_by_id_name(&pid, "case.json").await?;
+        let mut cases: Vec<Case> = serde_json::from_str(&content).map_err(|e| {
+            AijError::FileSystem(format!(
+                "Failed to parse case.json for problem {}: {}",
+                pid.as_ref(),
+                e
+            ))
+        })?;
+        cases.sort_unstable_by_key(|x| x.id);
+        Ok(ProblemCase(cases))
+    }
+
+    pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
+        let case_json = serde_json::to_string_pretty(&self.0).map_err(|e| {
+            error!(
+                "Failed to serialize problem cases for problem id {}: {}",
+                pid.as_ref(),
+                e
+            );
+            AijError::Server(format!("Failed to serialize problem cases: {}", e))
+        })?;
+        let case_path = fs::get_path_by_id_name(pid.as_ref(), "case.json", false).await?;
+        fs::write_to_file(&case_path, &case_json).await
+    }
+
+    pub(crate) async fn clear_cases(&mut self, pid: impl AsRef<str>) -> Result<()> {
+        for case in &self.0 {
+            let in_path = fs::get_path_by_id_name(&pid, &case.in_name, false).await?;
+            fs::remove_file(&in_path).await?;
+
+            if let Some(ans_name) = &case.ans_name {
+                let ans_path = fs::get_path_by_id_name(&pid, ans_name, false).await?;
+                fs::remove_file(&ans_path).await?;
+            }
+        }
+        self.0.clear();
+        Ok(())
+    }
+}
+
 /// Make the file at `path` executable by adding execute permissions for user, group, and others.
 pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> tokio::io::Result<()> {
     #[cfg(unix)]
@@ -183,7 +231,7 @@ pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> tokio::io::Result<()
     Ok(())
 }
 
-pub(crate) async fn compile(path: impl AsRef<Path>) -> crate::error::Result<()> {
+pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
     let testlib_path = &AijConfig::get().testlib_dir;
     let output = tokio::process::Command::new("g++")
         .arg(path.as_ref())
