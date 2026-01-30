@@ -109,6 +109,10 @@ pub(crate) async fn edit_problem_by_id(
             error!("Invalid payload for new problem id {}: {}", problem_id, e);
             crate::error::AijError::Request(format!("Invalid payload for new problem: {}", e))
         })?;
+
+        let case_info = ProblemCase::default();
+        case_info.save(problem_id).await?;
+        info!("Created default case info for problem id: {}", problem_id);
     }
     if let Some(description) = &payload.description {
         let path = fs::get_path_by_id_name(problem_id, "description.md", false).await?;
@@ -214,10 +218,6 @@ pub(crate) async fn edit_problem_by_id(
             }
         }
     }
-
-    let case_info = ProblemCase::default();
-    case_info.save(problem_id).await?;
-    info!("Created default case info for problem id: {}", problem_id);
 
     info!(
         "Successfully {} problem with id: {}",

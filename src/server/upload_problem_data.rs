@@ -7,7 +7,6 @@ use axum::Json;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::cmp::PartialEq;
 use tracing::{error, info};
 
 /// Test case for a problem.
@@ -19,7 +18,7 @@ pub(crate) struct ProblemTestCases {
 
 impl ProblemTestCases {
     /// Check if testcases are valid
-    fn check(&mut self, problem_type: &ProblemType) -> std::result::Result<(), String> {
+    fn check_complete(&mut self, problem_type: &ProblemType) -> std::result::Result<(), String> {
         if self.testcase.is_empty() {
             return Err("Testcase list is empty".to_string());
         }
@@ -33,7 +32,9 @@ impl ProblemTestCases {
                 return Err(format!("Testcase {} is missing input", tc.id));
             }
             // Interactive problems may not have answers
-            if !problem_type.eq(&ProblemType::Interactive) && tc.ans.is_none() {
+            if problem_type != &ProblemType::Interactive
+                && (tc.ans.is_none() || tc.ans_name.is_none())
+            {
                 return Err(format!("Testcase {} is missing answer", tc.id));
             }
         }
@@ -61,7 +62,7 @@ pub(crate) async fn upload_problem_data(
             AijError::Request(format!("Problem id: {} has no problem type", &payload.pid))
         })?;
 
-    payload.check(&problem_type).map_err(|e| {
+    payload.check_complete(&problem_type).map_err(|e| {
         error!("Invalid test cases: {}", e);
         AijError::Request(format!("Invalid test cases: {}", e))
     })?;
@@ -75,7 +76,7 @@ pub(crate) async fn upload_problem_data(
             fs::write_to_file(&input_path, r#in).await?;
         }
         tc.r#in = None;
-        if problem_type.eq(&ProblemType::Standard)
+        if problem_type == ProblemType::Standard
             && let Some(ans) = &tc.ans
             && let Some(ans_name) = &tc.ans_name
         {
