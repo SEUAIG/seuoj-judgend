@@ -4,6 +4,7 @@ use crate::fs::Case;
 use crate::judger::{ProblemCase, ProblemInfo, ProblemType};
 use crate::server::AppJson;
 use axum::Json;
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -50,21 +51,30 @@ pub(crate) async fn upload_problem_data(
 
     if !fs::check_problem_exists(&payload.pid).await? {
         error!("Problem id: {} does not exist", &payload.pid);
-        return Err(AijError::Request(format!(
-            "Problem id: {} does not exist",
-            &payload.pid
-        )));
+        return Err(AijError::Request(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "PROBLEM_NOT_FOUND".to_string(),
+            format!("Problem id: {} does not exist", &payload.pid),
+        ));
     }
     let problem_type = ProblemInfo::from_pid(&payload.pid)
         .await?
         .problem_type
         .ok_or_else(|| {
-            AijError::Request(format!("Problem id: {} has no problem type", &payload.pid))
+            AijError::Request(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "PROBLEM_TYPE_NOT_FOUND".to_string(),
+                format!("Problem id: {} has no problem type", &payload.pid),
+            )
         })?;
 
     payload.check_complete(&problem_type).map_err(|e| {
         error!("Invalid test cases: {}", e);
-        AijError::Request(format!("Invalid test cases: {}", e))
+        AijError::Request(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "INVALID_TEST_CASES".to_string(),
+            format!("Invalid test cases: {}", e),
+        )
     })?;
 
     let mut case_info = ProblemCase::from_pid(&payload.pid).await?;

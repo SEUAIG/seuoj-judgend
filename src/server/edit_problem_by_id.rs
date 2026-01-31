@@ -4,6 +4,7 @@ use crate::fs::check_problem_exists;
 use crate::judger::{CheckerType, ProblemCase, ProblemInfo, ProblemType};
 use crate::server::AppJson;
 use axum::Json;
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use base64::Engine;
 use base64::engine::general_purpose;
@@ -107,7 +108,11 @@ pub(crate) async fn edit_problem_by_id(
         info!("Creating new problem with id: {}", &problem_id);
         payload.check_complete().map_err(|e| {
             error!("Invalid payload for new problem id {}: {}", problem_id, e);
-            crate::error::AijError::Request(format!("Invalid payload for new problem: {}", e))
+            crate::error::AijError::Request(
+                StatusCode::BAD_REQUEST,
+                "INVALID_PAYLOAD".to_string(),
+                format!("Invalid payload for new problem: {}", e),
+            )
         })?;
 
         let case_info = ProblemCase::default();
@@ -179,10 +184,11 @@ pub(crate) async fn edit_problem_by_id(
                             "Failed to decode interactor base64 data for problem id {}: {}",
                             problem_id, e
                         );
-                        crate::error::AijError::Request(format!(
-                            "Failed to decode interactor base64 data: {}",
-                            e
-                        ))
+                        crate::error::AijError::Request(
+                            StatusCode::BAD_REQUEST,
+                            "INVALID_BASE64".to_string(),
+                            format!("Failed to decode interactor base64 data: {}", e),
+                        )
                     })?;
                 fs::write_to_file(&path, &data).await?;
             }
@@ -204,10 +210,11 @@ pub(crate) async fn edit_problem_by_id(
                             "Failed to decode checker base64 data for problem id {}: {}",
                             problem_id, e
                         );
-                        crate::error::AijError::Request(format!(
-                            "Failed to decode checker base64 data: {}",
-                            e
-                        ))
+                        crate::error::AijError::Request(
+                            StatusCode::BAD_REQUEST,
+                            "INVALID_BASE64".to_string(),
+                            format!("Failed to decode checker base64 data: {}", e),
+                        )
                     })?;
                 fs::write_to_file(&path, &data).await?;
             }

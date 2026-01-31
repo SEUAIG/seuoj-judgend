@@ -1,7 +1,8 @@
 //! File system operations for reading and writing problem and submission data.
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
-use crate::judger::{ProblemCase, ProblemInfo};
+use crate::judger::ProblemInfo;
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
@@ -25,11 +26,15 @@ impl FileSystem {
                     tokio::fs::create_dir_all(&config.problems_dir)
                         .await
                         .map_err(|e| {
-                            AijError::FileSystem(format!(
-                                "Failed to create problems directory {}: {}",
-                                config.problems_dir.to_string_lossy(),
-                                e
-                            ))
+                            AijError::FileSystem(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "CREATE_PROBLEMS_DIR_FAILED".to_string(),
+                                format!(
+                                    "Failed to create problems directory {}: {}",
+                                    config.problems_dir.to_string_lossy(),
+                                    e
+                                ),
+                            )
                         })?;
                 }
                 Ok(FileSystem {
@@ -70,18 +75,10 @@ pub(crate) struct Problem {
     pub(crate) output: String,
     pub(crate) example: Vec<Sample>,
     pub(crate) info: ProblemInfo,
-    pub(crate) case: ProblemCase,
 }
 
 pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<Problem> {
     let problem_info = ProblemInfo::from_pid(&pid).await?;
-    let case_info = ProblemCase::from_pid(&pid).await?;
-    if case_info.is_empty() {
-        return Err(AijError::FileSystem(format!(
-            "Problem {} has no test cases",
-            pid.as_ref()
-        )));
-    }
     let mut example = vec![];
     let mut sample_index = 1;
     while let Ok(r#in) = read_file_by_id_name(&pid, &format!("example_{}.in", sample_index)).await {
@@ -107,7 +104,6 @@ pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<Problem> 
             .unwrap_or_default(),
         example,
         info: problem_info,
-        case: case_info,
     })
 }
 
@@ -127,10 +123,11 @@ pub(crate) async fn get_path_by_id_name(
     let problem_dir = get_dir_by_problem_id(pid, false).await?;
     let file_path = problem_dir.join(filename.as_ref());
     if check && !file_path.exists() {
-        return Err(AijError::FileSystem(format!(
-            "File does not exist: {}",
-            file_path.to_string_lossy()
-        )));
+        return Err(AijError::FileSystem(
+            StatusCode::NOT_FOUND,
+            "FILE_NOT_FOUND".to_string(),
+            format!("File does not exist: {}", file_path.to_string_lossy()),
+        ));
     }
     Ok(file_path)
 }
@@ -160,11 +157,15 @@ pub(crate) async fn delete_dir_by_submission_id(submission_id: impl AsRef<str>) 
     let dir_path = get_dir_by_submission_id(submission_id).await?;
     if dir_path.exists() {
         tokio::fs::remove_dir_all(&dir_path).await.map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to remove directory {}: {}",
-                dir_path.to_string_lossy(),
-                e
-            ))
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "REMOVE_SUBMISSION_DIR_FAILED".to_string(),
+                format!(
+                    "Failed to remove directory {}: {}",
+                    dir_path.to_string_lossy(),
+                    e
+                ),
+            )
         })?;
     }
     Ok(())
@@ -176,25 +177,36 @@ pub(crate) async fn get_text_by_path(
 ) -> Result<String> {
     if let Some(len) = truncate_len {
         let mut file = tokio::fs::File::open(&path).await.map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to open file {}: {}",
-                path.as_ref().to_string_lossy(),
-                e
-            ))
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "OPEN_FILE_FAILED".to_string(),
+                format!(
+                    "Failed to open file {}: {}",
+                    path.as_ref().to_string_lossy(),
+                    e
+                ),
+            )
         })?;
         let mut buffer = vec![0u8; len];
-        let n = file
-            .read(&mut buffer)
-            .await
-            .map_err(|e| AijError::FileSystem(format!("Read error: {}", e)))?;
+        let n = file.read(&mut buffer).await.map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "READ_FILE_FAILED".to_string(),
+                format!("Read error: {}", e),
+            )
+        })?;
         Ok(String::from_utf8_lossy(&buffer[..n]).into_owned())
     } else {
         tokio::fs::read_to_string(path.as_ref()).await.map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to read file {}: {}",
-                path.as_ref().to_string_lossy(),
-                e
-            ))
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "OPEN_FILE_FAILED".to_string(),
+                format!(
+                    "Failed to read file {}: {}",
+                    path.as_ref().to_string_lossy(),
+                    e
+                ),
+            )
         })
     }
 }
@@ -203,22 +215,30 @@ pub(crate) async fn get_stream_by_path(
     path: impl AsRef<Path>,
 ) -> Result<ReaderStream<tokio::fs::File>> {
     let file = tokio::fs::File::open(path.as_ref()).await.map_err(|e| {
-        AijError::FileSystem(format!(
-            "Failed to open file {}: {}",
-            path.as_ref().to_string_lossy(),
-            e
-        ))
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "OPEN_FILE_FAILED".to_string(),
+            format!(
+                "Failed to open file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ),
+        )
     })?;
     Ok(ReaderStream::new(file))
 }
 
 pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
     tokio::fs::create_dir_all(path.as_ref()).await.map_err(|e| {
-        AijError::FileSystem(format!(
-            "Failed to create directories for {}: {}",
-            path.as_ref().to_string_lossy(),
-            e
-        ))
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create directories".to_string(),
+            format!(
+                "Failed to create directories for {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ),
+        )
     })
 }
 
@@ -229,11 +249,15 @@ pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u
         create_dir_all(parent).await?;
     }
     tokio::fs::write(path.as_ref(), content).await.map_err(|e| {
-        AijError::FileSystem(format!(
-            "Failed to write to file {}: {}",
-            path.as_ref().to_string_lossy(),
-            e
-        ))
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "WRITE_FILE_FAILED".to_string(),
+            format!(
+                "Failed to write to file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ),
+        )
     })
 }
 
@@ -242,11 +266,15 @@ pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
         return Ok(());
     }
     tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
-        AijError::FileSystem(format!(
-            "Failed to remove file {}: {}",
-            path.as_ref().to_string_lossy(),
-            e
-        ))
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "REMOVE_FILE_FAILED".to_string(),
+            format!(
+                "Failed to remove file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            ),
+        )
     })
 }
 
@@ -257,10 +285,19 @@ pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
 
 pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let filename = filename.as_ref();
-    let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$")
-        .map_err(|e| AijError::Request(format!("Failed to compile regex: {}", e)))?;
+    let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$").map_err(|e| {
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "REGEX_COMPILE_FAILED".to_string(),
+            format!("Failed to compile regex: {}", e),
+        )
+    })?;
     if filename.is_empty() || !regex.is_match(filename) {
-        return Err(AijError::Request(format!("Invalid filename: {filename}")));
+        return Err(AijError::Request(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FILENAME".to_string(),
+            format!("Invalid filename: {filename}"),
+        ));
     }
     Ok(())
 }

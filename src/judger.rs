@@ -1,10 +1,13 @@
 //! Judger module for handling code submission judging.
+
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
+use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 pub(crate) use crate::judger::utils::{
     CheckerType, ProblemCase, ProblemInfo, ProblemType, compile,
 };
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use utils::chmod_plus_x;
@@ -45,19 +48,9 @@ pub(crate) async fn judge(
         SupportedLanguages::Go1_22 => "go",
         SupportedLanguages::Java17 => "java",
     };
-    let source_file_path = tmp_dir
-        .join("source_code")
-        .with_extension(source_file_extension);
+    let source_file_path = tmp_dir.join("Main").with_extension(source_file_extension);
 
-    tokio::fs::write(&source_file_path, code)
-        .await
-        .map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to write source code to {}: {}",
-                source_file_path.to_string_lossy(),
-                e
-            ))
-        })?;
+    fs::write_to_file(&source_file_path, code).await?;
     let (exec_path, args, seccomp_rule) = match language {
         SupportedLanguages::C
         | SupportedLanguages::Cpp
@@ -67,14 +60,14 @@ pub(crate) async fn judge(
             // Compile the code
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
             let compile_output = if language == SupportedLanguages::C {
-                tokio::process::Command::new("gcc")
+                tokio::process::Command::new("/usr/bin/gcc")
                     .arg(&source_file_path)
                     .arg("-o")
                     .arg(&exec_path)
                     .output()
                     .await
             } else {
-                let mut cmd = tokio::process::Command::new("g++");
+                let mut cmd = tokio::process::Command::new("/usr/bin/g++");
                 match language {
                     SupportedLanguages::Cpp11 => {
                         cmd.arg("-std=c++11");
@@ -93,7 +86,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -130,14 +129,20 @@ pub(crate) async fn judge(
         ),
         SupportedLanguages::Go1_22 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
-            let compile_output = tokio::process::Command::new("go")
+            let compile_output = tokio::process::Command::new("/usr/bin/go")
                 .arg("build")
                 .arg("-o")
                 .arg(&exec_path)
                 .arg(&source_file_path)
                 .output()
                 .await
-                .map_err(|e| AijError::Judge(format!("Failed to compile source code: {}", e)))?;
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -145,10 +150,52 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
-            return Err(AijError::Judge(format!(
-                "Language {:?} not yet supported",
-                language
-            )));
+            problem_info.max_real_time_ms = match problem_info.max_real_time_ms {
+                Some(-1) => Some(-1),
+                Some(m) => Some(m * 2),
+                None => None,
+            };
+            problem_info.max_cpu_time_ms = match problem_info.max_cpu_time_ms {
+                Some(-1) => Some(-1),
+                Some(m) => Some(m * 2),
+                None => None,
+            };
+            let compile_output = tokio::process::Command::new("/usr/bin/javac")
+                .arg(&source_file_path)
+                .output()
+                .await
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
+            if !compile_output.status.success() {
+                let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                return Ok(JudgeResult::CompileError(stderr.to_string()));
+            }
+            let max_memory = problem_info.max_memory_byte.ok_or_else(|| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "MAX_MEMORY_NOT_SPECIFIED".to_string(),
+                    format!(
+                        "Max memory is not specified for problem `{}` (expected in info.json)",
+                        pid
+                    ),
+                )
+            })? / (512 * 1024);
+            (
+                "/usr/bin/java".to_string(),
+                vec![
+                    "/usr/bin/java".to_string(),
+                    format!("-Xmx{}m", max_memory),
+                    "-cp".to_string(),
+                    tmp_dir.to_string_lossy().to_string(),
+                    "Main".to_string(),
+                ],
+                judger::SeccompRuleName::Java,
+            )
         }
     };
     let mut config = problem_info.to_judger_config();
@@ -156,35 +203,46 @@ pub(crate) async fn judge(
     let mut out_vec = vec![];
     let case_info = ProblemCase::from_pid(&pid).await?;
     let problem_type = problem_info.problem_type.ok_or_else(|| {
-        AijError::Judge(format!(
-            "Problem type is not specified for problem `{}` (expected in info.json)",
-            pid
-        ))
+        AijError::Judge(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "PROBLEM_TYPE_NOT_SPECIFIED".to_string(),
+            format!(
+                "Problem type is not specified for problem `{}` (expected in info.json)",
+                pid
+            ),
+        )
     })?;
     let checker_type = problem_info.checker_type.ok_or_else(|| {
-        AijError::Judge(format!(
-            "Checker type is not specified for problem `{}` (expected in info.json)",
-            pid
-        ))
+        AijError::Judge(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "CHECKER_TYPE_NOT_SPECIFIED".to_string(),
+            format!(
+                "Checker type is not specified for problem `{}` (expected in info.json)",
+                pid
+            ),
+        )
     })?;
     for case in case_info.0 {
         let input_path = get_path_by_id_name(&pid, case.in_name, true).await?;
-        let ans_path = match problem_type {
-            ProblemType::Standard => {
-                get_path_by_id_name(
+        let ans_path =
+            match problem_type {
+                ProblemType::Standard => get_path_by_id_name(
                     &pid,
                     case.ans_name.ok_or_else(|| {
-                        AijError::Judge(format!(
-                            "Answer file name is not specified for test case {} of problem {}",
-                            case.id, pid
-                        ))
+                        AijError::Judge(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "ANSWER_FILE_NAME_NOT_SPECIFIED".to_string(),
+                            format!(
+                                "Answer file name is not specified for test case {} of problem {}",
+                                case.id, pid
+                            ),
+                        )
                     })?,
                     true,
                 )
-                .await?
-            }
-            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
-        };
+                .await?,
+                ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
+            };
         let mut config = config.clone();
         config.exe_path = exec_path.clone();
         config.args = args.clone();
@@ -205,19 +263,7 @@ pub(crate) async fn judge(
             ProblemType::Standard => None,
             ProblemType::Interactive => Some({
                 let path = get_path_by_id_name(&pid, "interactor", true).await?;
-                if !path.exists() {
-                    return Err(AijError::FileSystem(format!(
-                        "Interactor file does not exist: {}",
-                        path.to_string_lossy()
-                    )));
-                }
-                chmod_plus_x(&path).await.map_err(|e| {
-                    AijError::FileSystem(format!(
-                        "Failed to set execute permission for interactor {}: {}",
-                        path.to_string_lossy(),
-                        e
-                    ))
-                })?;
+                chmod_plus_x(&path).await?;
                 path
             }),
         };
@@ -225,8 +271,13 @@ pub(crate) async fn judge(
             "Judging submission {} on test case {} with interactor: {:?} AND config: {:?}",
             submission_id, case.id, interactor, config
         );
-        let res = judger::run(&config, interactor)
-            .map_err(|e| AijError::Judge(format!("Judger run failed: {}", e)))?;
+        let res = judger::run(&config, interactor).map_err(|e| {
+            AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "JUDGER_RUN_FAILED".to_string(),
+                format!("Judger run failed: {}", e),
+            )
+        })?;
         info!(
             "Judger result for test case {} of submission {}: {:?}",
             case.id, submission_id, res
@@ -273,10 +324,14 @@ pub(crate) async fn judge(
                 (err_info, "SystemError")
             }
             _ => {
-                return Err(AijError::Judge(format!(
-                    "Unexpected judger result: {:?} for submission {} on test case {}",
-                    res, submission_id, case.id
-                )));
+                return Err(AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "UNEXPECTED_JUDGER_RESULT".to_string(),
+                    format!(
+                        "Unexpected judger result: {:?} for submission {} on test case {}",
+                        res, submission_id, case.id
+                    ),
+                ));
             }
         };
         out_vec.push(JudgeResultItem {
