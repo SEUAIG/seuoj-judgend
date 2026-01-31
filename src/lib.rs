@@ -12,6 +12,7 @@ use crate::server::{
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post};
+use tokio::sync::OnceCell;
 
 pub mod config;
 pub mod error;
@@ -38,8 +39,14 @@ pub fn app() -> Router {
 
 /// initialize the application (configuration, logger, etc.)
 pub async fn initialize() -> &'static AijConfig {
+    static INIT_ONCE: OnceCell<()> = OnceCell::const_new();
     let config = AijConfig::get();
-    logger::init_logger(&config.log_dir);
-    config.update_binary_path().await;
+
+    INIT_ONCE
+        .get_or_init(|| async {
+            logger::init_logger(&config.log_dir);
+            config.update_binary_path().await;
+        })
+        .await;
     config
 }

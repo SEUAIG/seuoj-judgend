@@ -128,7 +128,16 @@ impl AijConfig {
             self.output_truncate_length = val;
         }
         if let Ok(val) = env::var("AIJ_TOOLCHAINS") {
-            self.toolchains = val.split(',').map(|s| s.trim().to_string()).collect();
+            self.toolchains = val
+                .split(',')
+                .filter_map(|s| {
+                    if s.trim().is_empty() {
+                        None
+                    } else {
+                        Some(s.trim().to_string())
+                    }
+                })
+                .collect();
         }
         self
     }
@@ -160,32 +169,30 @@ impl AijConfig {
                 bin_name.as_ref(),
                 path.clone(),
                 &mut config.binary_path_map.write().await,
-            )
-                .await;
+            );
 
             Ok(path.clone())
         } else {
             Err(AijError::Config(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "BINARY_NOT_FOUND".into(),
-                format!("Binary '{}' not found in toolchains", bin_name.as_ref()),
+                format!("Binary '{}' not found in PATH", bin_name.as_ref()),
             ))
         }
     }
 
     pub(crate) async fn update_binary_path(&self) {
-        let mut bin_map = self.binary_path_map.write().await;
         let config = AijConfig::get();
         for bin in &config.toolchains {
             if let Ok(path) = which::which(bin) {
-                Self::update_binary_path_item(bin, path, &mut bin_map).await;
+                Self::update_binary_path_item(bin, path, &mut self.binary_path_map.write().await);
             } else {
                 error!("Binary '{}' specified in toolchains not found in PATH", bin);
             }
         }
     }
 
-    async fn update_binary_path_item(
+    fn update_binary_path_item(
         name: impl AsRef<str>,
         path: PathBuf,
         bin_map: &mut RwLockWriteGuard<'_, HashMap<String, PathBuf>>,
