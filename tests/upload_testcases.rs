@@ -1,14 +1,11 @@
-use aij_judgend::app;
-use aij_judgend::config::AijConfig;
-use aij_judgend::logger::init_logger;
-use axum_test::TestServer;
+use crate::utils::get_test_server;
 use serde_json::json;
+
+mod utils;
 
 #[tokio::test]
 async fn test_upload_problem_data() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
+    let server = get_test_server();
 
     let response = server
         .post("/judge/problem/data")
@@ -18,12 +15,16 @@ async fn test_upload_problem_data() {
                 {
                     "id": 1,
                     "in": "1 2\n",
-                    "ans": "3\n"
+                    "in_name": "1.aaa",
+                    "ans": "3\n",
+                    "ans_name": "1.222"
                 },
                 {
                     "id": 2,
                     "in": "2 3\n",
-                    "ans": "5\n"
+                    "in_name": "2.xxx",
+                    "ans": "5\n",
+                    "ans_name": "2.uuu"
                 }
             ]
         }))
@@ -44,7 +45,9 @@ async fn test_upload_problem_data() {
                 {
                     "id": 1,
                     "in": "1 2",
-                    "ans": "3"
+                    "in_name": "1.in",
+                    "ans": "3",
+                    "ans_name": "1.ans"
                 }
             ]
         }))

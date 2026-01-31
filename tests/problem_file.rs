@@ -1,14 +1,10 @@
-use aij_judgend::app;
-use aij_judgend::config::AijConfig;
-use aij_judgend::logger::init_logger;
+use crate::utils::get_test_server;
 use axum::http::StatusCode;
-use axum_test::TestServer;
+mod utils;
 
 #[tokio::test]
 async fn test_get_problem_file() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
+    let server = get_test_server();
 
     let response = server.get("/judge/problem/file/1/1.in").await;
     response.assert_status(StatusCode::OK);
@@ -22,20 +18,14 @@ async fn test_get_problem_file() {
 
 #[tokio::test]
 async fn test_get_problem_file_not_found() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
-
+    let server = get_test_server();
     let response = server.get("/judge/problem/file/999/999.in").await;
     response.assert_status(StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_get_problem_file_invalid_filename() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
-
+    let server = get_test_server();
     let response = server.get("/judge/problem/file/1/&&.in").await;
     response.assert_status(StatusCode::BAD_REQUEST);
 }

@@ -1,16 +1,12 @@
-use aij_judgend::app;
-use aij_judgend::config::AijConfig;
-use aij_judgend::logger::init_logger;
-use axum_test::TestServer;
+use crate::utils::get_test_server;
 use base64::Engine;
 use base64::engine::general_purpose;
 use serde_json::json;
 
+mod utils;
 #[tokio::test]
 async fn test_edit_problem() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
+    let server = get_test_server();
 
     let checker_path = "./assets/problems/1/checker";
     let base64_checker = general_purpose::STANDARD

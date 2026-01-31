@@ -1,10 +1,11 @@
 use crate::config::AijConfig;
-use crate::error::AijError::Judge;
+use crate::error::AijError;
 use crate::error::Result;
 use crate::fs::delete_dir_by_submission_id;
 use crate::judger::{JudgeResult, ProblemCase, SupportedLanguages, judge};
 use crate::server::{AppJson, get_judge_semaphore};
 use axum::Json;
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use reqwest::Client;
 use serde::Deserialize;
@@ -34,7 +35,11 @@ pub(crate) async fn judge_problem_by_id(
     if case_info.is_empty() {
         let message = format!("Problem {} has no test cases.", &payload.problem_id);
         error!("{}", message);
-        return Err(Judge(message));
+        return Err(AijError::Request(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "NO_TEST_CASES".to_string(),
+            message,
+        ));
     }
     tokio::spawn(async move {
         let semaphore = get_judge_semaphore().await;
@@ -55,7 +60,11 @@ pub(crate) async fn judge_problem_by_id(
                 &payload.submission_id
             );
             error!("{}", message);
-            Err(Judge(message))
+            Err(AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SEMAPHORE_ACQUIRE_FAILED".to_string(),
+                message,
+            ))
         };
 
         if !AijConfig::get().save_submissions

@@ -1,5 +1,6 @@
 use crate::fs::get_path_by_id_name;
 use crate::judger::utils::chmod_plus_x;
+use axum::http::StatusCode;
 use std::path::Path;
 use tracing::{error, info};
 
@@ -13,15 +14,17 @@ pub(crate) async fn special_checker(
         info!("Using special checker for problem {}", problem_id.as_ref());
         let checker_path = get_path_by_id_name(problem_id.as_ref(), "checker", true).await?;
         chmod_plus_x(&checker_path).await.map_err(|e| {
-            error!(
+            let message = format!(
                 "Failed to set execute permission for checker of problem {}: {}",
                 problem_id.as_ref(),
                 e
             );
-            crate::error::AijError::Judge(format!(
-                "Failed to set execute permission for checker: {}",
-                e
-            ))
+            error!("{}", message);
+            crate::error::AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "CHECKER_PERMISSION_FAILED".to_string(),
+                message,
+            )
         })?;
 
         let output = tokio::process::Command::new(checker_path)
@@ -31,12 +34,17 @@ pub(crate) async fn special_checker(
             .output()
             .await
             .map_err(|e| {
-                error!(
+                let message = format!(
                     "Failed to execute checker of problem {}: {}",
                     problem_id.as_ref(),
                     e
                 );
-                crate::error::AijError::Judge(format!("Failed to execute checker: {}", e))
+                error!("{}", message);
+                crate::error::AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "CHECKER_EXECUTION_FAILED".to_string(),
+                    message,
+                )
             })?;
         let checker_message = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if output.status.success() {

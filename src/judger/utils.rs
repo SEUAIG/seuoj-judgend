@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::fs;
 use crate::fs::Case;
 use judger::Config;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::path::Path;
@@ -61,11 +62,15 @@ impl ProblemInfo {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "info.json").await?;
         let info: ProblemInfo = serde_json::from_str(&content).map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to parse info.json for problem {}: {}",
-                pid.as_ref(),
-                e
-            ))
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_PARSE_PROBLEM_INFO".to_string(),
+                format!(
+                    "Failed to parse info.json for problem {}: {}",
+                    pid.as_ref(),
+                    e
+                ),
+            )
         })?;
         Ok(info.apply_defaults())
     }
@@ -155,7 +160,11 @@ impl ProblemInfo {
                 pid.as_ref(),
                 e
             );
-            AijError::Server(format!("Failed to serialize problem info: {}", e))
+            AijError::Server(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_SERIALIZE_PROBLEM_INFO".to_string(),
+                format!("Failed to serialize problem info: {}", e),
+            )
         })?;
         let info_path = fs::get_path_by_id_name(pid.as_ref(), "info.json", false).await?;
         fs::write_to_file(&info_path, &info_json).await
@@ -178,11 +187,15 @@ impl ProblemCase {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "case.json").await?;
         let mut cases: Vec<Case> = serde_json::from_str(&content).map_err(|e| {
-            AijError::FileSystem(format!(
-                "Failed to parse case.json for problem {}: {}",
-                pid.as_ref(),
-                e
-            ))
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_PARSE_PROBLEM_CASES".to_string(),
+                format!(
+                    "Failed to parse case.json for problem {}: {}",
+                    pid.as_ref(),
+                    e
+                ),
+            )
         })?;
         cases.sort_unstable_by_key(|x| x.id);
         Ok(ProblemCase(cases))
@@ -195,7 +208,11 @@ impl ProblemCase {
                 pid.as_ref(),
                 e
             );
-            AijError::Server(format!("Failed to serialize problem cases: {}", e))
+            AijError::Server(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_SERIALIZE_PROBLEM_CASES".to_string(),
+                format!("Failed to serialize problem cases: {}", e),
+            )
         })?;
         let case_path = fs::get_path_by_id_name(pid.as_ref(), "case.json", false).await?;
         fs::write_to_file(&case_path, &case_json).await
@@ -217,15 +234,37 @@ impl ProblemCase {
 }
 
 /// Make the file at `path` executable by adding execute permissions for user, group, and others.
-pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> tokio::io::Result<()> {
+pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> Result<()> {
     #[cfg(unix)]
     {
-        let metadata = tokio::fs::metadata(&path).await?;
+        let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_GET_FILE_METADATA".to_string(),
+                format!(
+                    "Failed to get metadata for file {}: {}",
+                    path.as_ref().display(),
+                    e
+                ),
+            )
+        })?;
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = metadata.permissions();
         if permissions.mode() & 0o111 == 0 {
             permissions.set_mode(permissions.mode() | 0o111);
-            return tokio::fs::set_permissions(&path, permissions).await;
+            return tokio::fs::set_permissions(&path, permissions)
+                .await
+                .map_err(|e| {
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "FAILED_SET_FILE_PERMISSIONS".to_string(),
+                        format!(
+                            "Failed to set execute permissions for file {}: {}",
+                            path.as_ref().display(),
+                            e
+                        ),
+                    )
+                });
         }
     }
     Ok(())
@@ -251,11 +290,15 @@ pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
                 e.to_string()
             };
             error!("Compilation error: {}", message);
-            AijError::Request(format!(
-                "Failed to execute g++ for {}: {}",
-                path.as_ref().display(),
-                message
-            ))
+            AijError::Request(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "COMPILATION_EXECUTION_FAILED".to_string(),
+                format!(
+                    "Failed to execute g++ for {}: {}",
+                    path.as_ref().display(),
+                    message
+                ),
+            )
         })?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr);
@@ -264,11 +307,15 @@ pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
             path.as_ref().display(),
             message
         );
-        return Err(AijError::Request(format!(
-            "Compilation failed for {}: {}",
-            path.as_ref().display(),
-            message
-        )));
+        return Err(AijError::Request(
+            StatusCode::BAD_REQUEST,
+            "COMPILATION_FAILED".to_string(),
+            format!(
+                "Compilation failed for {}: {}",
+                path.as_ref().display(),
+                message
+            ),
+        ));
     }
     Ok(())
 }

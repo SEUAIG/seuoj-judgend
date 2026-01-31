@@ -3,7 +3,7 @@ use crate::fs;
 use crate::fs::get_stream_by_path;
 use axum::body::Body;
 use axum::extract::Path;
-use axum::http::header;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 pub(crate) async fn serve_problem_file(
@@ -20,9 +20,13 @@ pub(crate) async fn serve_problem_file(
         )
         .body(Body::from_stream(file_content))
         .map_err(|e| {
-            AijError::Server(format!(
-                "Failed to build response for problem file {} of problem {}: {}",
-                filename, pid, e
-            ))
+            AijError::Server(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "RESPONSE_BUILD_FAILED".to_string(),
+                format!(
+                    "Failed to build response for problem file {} of problem {}: {}",
+                    filename, pid, e
+                ),
+            )
         })
 }
