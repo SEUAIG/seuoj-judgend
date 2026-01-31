@@ -44,9 +44,12 @@ impl FileSystem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Case {
     pub(crate) id: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) r#in: Option<String>,
     pub(crate) in_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ans: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ans_name: Option<String>,
 }
 

@@ -1,14 +1,15 @@
+use crate::utils::get_test_server;
 use aij_judgend::app;
 use aij_judgend::config::AijConfig;
 use aij_judgend::logger::init_logger;
 use axum::http::StatusCode;
 use axum_test::TestServer;
 
+mod utils;
+
 #[tokio::test]
 async fn test_get_problem_file() {
-    let config = AijConfig::get();
-    let _guard = init_logger(&config.log_dir);
-    let server = TestServer::new(app()).expect("Failed to create test server");
+    let server = get_test_server();
 
     let response = server.get("/judge/problem/file/1/1.in").await;
     response.assert_status(StatusCode::OK);
