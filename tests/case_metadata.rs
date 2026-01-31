@@ -12,10 +12,10 @@ async fn test_get_case_metadata() {
     let body = response.text();
     let json: serde_json::Value = serde_json::from_str(&body).expect("Response is not valid JSON");
     println!("Response JSON: {}", json);
-    let json_array = json.as_array().expect("Response JSON is not an array");
-    assert_eq!(json_array.len(), 1);
-    let case_metadata = &json_array[0];
-    assert_eq!(case_metadata["id"], 1);
-    assert_eq!(case_metadata["in_name"], "1.in");
-    assert_eq!(case_metadata["ans_name"], "1.ans");
+    assert_eq!(json["code"], 0);
+    assert_eq!(json["message"], "Success");
+    assert!(json["data"]["test_cases"].is_array());
+    assert_eq!(json["data"]["test_cases"].as_array().unwrap().len(), 1);
+    assert_eq!(json["data"]["test_cases"][0]["in_name"], "1.in");
+    assert_eq!(json["data"]["test_cases"][0]["ans_name"], "1.ans");
 }

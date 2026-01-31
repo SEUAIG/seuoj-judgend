@@ -23,8 +23,7 @@ pub fn init_logger(log_dir: impl AsRef<Path>) {
             .with(fmt::layer().with_ansi(false).with_writer(non_blocking))
             .init();
 
-        if GUARD.set(guard).is_err() {
-            eprintln!("Warning: Logger guard already initialized.");
-        }
+        #[allow(clippy::expect_used)]
+        GUARD.set(guard).expect("Logger guard already set");
     })
 }
