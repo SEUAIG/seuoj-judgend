@@ -1,14 +1,11 @@
-use aij_judgend::app;
-use aij_judgend::config::AijConfig;
-use aij_judgend::logger::init_logger;
+use aij_judgend::{app, initialize};
 use tokio::net::TcpListener;
 use tokio::signal;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    let config = AijConfig::get();
-    init_logger(&config.log_dir);
+    let config = initialize().await;
     info!(
         "FileSystem initialized with base path: {}",
         &config.problems_dir.to_string_lossy()

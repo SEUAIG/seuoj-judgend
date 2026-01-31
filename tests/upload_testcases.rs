@@ -5,7 +5,7 @@ mod utils;
 
 #[tokio::test]
 async fn test_upload_problem_data() {
-    let server = get_test_server();
+    let server = get_test_server().await;
 
     let response = server
         .post("/judge/problem/data")

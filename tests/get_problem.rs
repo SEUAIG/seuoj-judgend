@@ -4,7 +4,7 @@ mod utils;
 
 #[tokio::test]
 async fn test_get_problem() {
-    let server = get_test_server();
+    let server = get_test_server().await;
 
     let response = server.get("/judge/problem/1").await;
 

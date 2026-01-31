@@ -54,17 +54,17 @@
 
 ## 环境变量说明
 
-| 环境变量                          | 说明                           | 默认值                  |
-|-------------------------------|------------------------------|----------------------|
-| `AIJ_LISTEN_ADDR`             | 服务器监听的 IP 地址                 | `0.0.0.0`            |
-| `AIJ_LISTEN_PORT`             | 服务器监听的端口号                    | `9090`               |
-| `AIJ_MAX_CONCURRENT_REQUESTS` | 最大并发请求处理数量                   | `6`                  |
-| `AIJ_PROBLEMS_DIR`            | 题目资源文件存储目录                   | `./assets/problems/` |
-| `AIJ_LOG_DIR`                 | 日志文件存储目录                     | `./assets/logs/`     |
-| `AIJ_TESTLIB_DIR`             | testlib 文件存储目录               | `./assets/testlib/`  |
-| `AIJ_BACKEND_HOST`            | 后端服务器的主机地址                   | `127.0.0.1`          |
-| `AIJ_BACKEND_PORT`            | 后端服务器的端口号                    | `8080`               |
-| `AIJ_BACKEND_PREFIX`          | 后端 API 的路径前缀                 | ` `                  |
-| `AIJ_SAVE_SUBMISSIONS`        | 是否保存提交的代码文件 (`true`/`false`) | `false`              |
-| `AIJ_OUTPUT_TRUNCATE_LENGTH`  | 输出结果截断的字符长度                  | `200`                |
-
+| 环境变量                          | 说明                           | 默认值                                  |
+|-------------------------------|------------------------------|--------------------------------------|
+| `AIJ_LISTEN_ADDR`             | 服务器监听的 IP 地址                 | `0.0.0.0`                            |
+| `AIJ_LISTEN_PORT`             | 服务器监听的端口号                    | `9090`                               |
+| `AIJ_MAX_CONCURRENT_REQUESTS` | 最大并发请求处理数量                   | `6`                                  |
+| `AIJ_PROBLEMS_DIR`            | 题目资源文件存储目录                   | `./assets/problems/`                 |
+| `AIJ_LOG_DIR`                 | 日志文件存储目录                     | `./assets/logs/`                     |
+| `AIJ_TESTLIB_DIR`             | testlib 文件存储目录               | `./assets/testlib/`                  |
+| `AIJ_BACKEND_HOST`            | 后端服务器的主机地址                   | `127.0.0.1`                          |
+| `AIJ_BACKEND_PORT`            | 后端服务器的端口号                    | `8080`                               |
+| `AIJ_BACKEND_PREFIX`          | 后端 API 的路径前缀                 | ` `                                  |
+| `AIJ_SAVE_SUBMISSIONS`        | 是否保存提交的代码文件 (`true`/`false`) | `false`                              |
+| `AIJ_OUTPUT_TRUNCATE_LENGTH`  | 输出结果截断的字符长度                  | `200`                                |
+| `AIJ_TOOLCHAINS`              | 支持的二进制工具链列表，逗号分隔             | `gcc,g++,node,java,javac,python3,go` |

@@ -4,6 +4,7 @@
 #![deny(clippy::panic)]
 //! SEU AIJ Judge-Endpoint
 
+use crate::config::AijConfig;
 use crate::server::{
     edit_problem_by_id, get_problem_by_id, judge_problem_by_id, serve_data_metadata,
     serve_problem_file, upload_problem_data,
@@ -33,4 +34,12 @@ pub fn app() -> Router {
         )
         .route("/judge/problem/data/{pid}", get(serve_data_metadata))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
+}
+
+/// initialize the application (configuration, logger, etc.)
+pub async fn initialize() -> &'static AijConfig {
+    let config = AijConfig::get();
+    logger::init_logger(&config.log_dir);
+    config.update_binary_path().await;
+    config
 }

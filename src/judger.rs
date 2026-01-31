@@ -60,14 +60,16 @@ pub(crate) async fn judge(
             // Compile the code
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
             let compile_output = if language == SupportedLanguages::C {
-                tokio::process::Command::new("/usr/bin/gcc")
+                let gcc = AijConfig::get_binary_path("gcc").await?;
+                tokio::process::Command::new(gcc)
                     .arg(&source_file_path)
                     .arg("-o")
                     .arg(&exec_path)
                     .output()
                     .await
             } else {
-                let mut cmd = tokio::process::Command::new("/usr/bin/g++");
+                let gpp = AijConfig::get_binary_path("g++").await?;
+                let mut cmd = tokio::process::Command::new(gpp);
                 match language {
                     SupportedLanguages::Cpp11 => {
                         cmd.arg("-std=c++11");
@@ -110,26 +112,31 @@ pub(crate) async fn judge(
                 Some(m) => Some(m * 2),
                 None => None,
             };
+            let python3 = AijConfig::get_binary_path("python3").await?;
             (
-                "/usr/bin/python3".to_string(),
+                python3.to_string_lossy().to_string(),
                 vec![
-                    "/usr/bin/python3".to_string(),
+                    python3.to_string_lossy().to_string(),
                     source_file_path.to_string_lossy().to_string(),
                 ],
                 judger::SeccompRuleName::Python,
             )
         }
-        SupportedLanguages::Nodejs22 => (
-            "/usr/bin/node".to_string(),
-            vec![
-                "/usr/bin/node".to_string(),
-                source_file_path.to_string_lossy().to_string(),
-            ],
-            judger::SeccompRuleName::Node,
-        ),
+        SupportedLanguages::Nodejs22 => {
+            let nodejs = AijConfig::get_binary_path("node").await?;
+            (
+                nodejs.to_string_lossy().to_string(),
+                vec![
+                    nodejs.to_string_lossy().to_string(),
+                    source_file_path.to_string_lossy().to_string(),
+                ],
+                judger::SeccompRuleName::Node,
+            )
+        }
         SupportedLanguages::Go1_22 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
-            let compile_output = tokio::process::Command::new("/usr/bin/go")
+            let go_bin = AijConfig::get_binary_path("go").await?;
+            let compile_output = tokio::process::Command::new(go_bin)
                 .arg("build")
                 .arg("-o")
                 .arg(&exec_path)
@@ -160,7 +167,8 @@ pub(crate) async fn judge(
                 Some(m) => Some(m * 2),
                 None => None,
             };
-            let compile_output = tokio::process::Command::new("/usr/bin/javac")
+            let javac = AijConfig::get_binary_path("javac").await?;
+            let compile_output = tokio::process::Command::new(javac)
                 .arg(&source_file_path)
                 .output()
                 .await
@@ -185,10 +193,11 @@ pub(crate) async fn judge(
                     ),
                 )
             })? / (512 * 1024);
+            let java = AijConfig::get_binary_path("java").await?;
             (
-                "/usr/bin/java".to_string(),
+                java.to_string_lossy().to_string(),
                 vec![
-                    "/usr/bin/java".to_string(),
+                    java.to_string_lossy().to_string(),
                     format!("-Xmx{}m", max_memory),
                     "-cp".to_string(),
                     tmp_dir.to_string_lossy().to_string(),

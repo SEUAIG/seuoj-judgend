@@ -4,7 +4,7 @@ mod utils;
 
 #[tokio::test]
 async fn test_get_problem_file() {
-    let server = get_test_server();
+    let server = get_test_server().await;
 
     let response = server.get("/judge/problem/file/1/1.in").await;
     response.assert_status(StatusCode::OK);
@@ -18,14 +18,14 @@ async fn test_get_problem_file() {
 
 #[tokio::test]
 async fn test_get_problem_file_not_found() {
-    let server = get_test_server();
+    let server = get_test_server().await;
     let response = server.get("/judge/problem/file/999/999.in").await;
     response.assert_status(StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_get_problem_file_invalid_filename() {
-    let server = get_test_server();
+    let server = get_test_server().await;
     let response = server.get("/judge/problem/file/1/&&.in").await;
     response.assert_status(StatusCode::BAD_REQUEST);
 }
