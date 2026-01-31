@@ -6,7 +6,7 @@ use serde_json::json;
 mod utils;
 #[tokio::test]
 async fn test_edit_problem() {
-    let server = get_test_server();
+    let server = get_test_server().await;
 
     let checker_path = "./assets/problems/1/checker";
     let base64_checker = general_purpose::STANDARD

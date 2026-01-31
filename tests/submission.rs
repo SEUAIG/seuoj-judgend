@@ -4,7 +4,7 @@ use serde_json::json;
 mod utils;
 #[tokio::test]
 async fn test_submission() {
-    let server = get_test_server();
+    let server = get_test_server().await;
 
     let response = server
         .post("/judge/submission")

@@ -1,10 +1,14 @@
 //! Configuration management for the AIJ server.
 
-use crate::error::Result;
+use crate::error::{AijError, Result};
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::{RwLock, RwLockWriteGuard};
+use tracing::{error, info, warn};
 
 static CONFIG: OnceLock<AijConfig> = OnceLock::new();
 
@@ -33,6 +37,11 @@ pub struct AijConfig {
     pub save_submissions: bool,
     /// Truncate length of long outputs
     pub output_truncate_length: usize,
+    /// List of available toolchains
+    pub toolchains: Vec<String>,
+    /// Binary path map for toolchains
+    #[serde(skip)]
+    binary_path_map: Arc<RwLock<HashMap<String, PathBuf>>>,
 }
 
 impl Default for AijConfig {
@@ -49,6 +58,16 @@ impl Default for AijConfig {
             backend_prefix: "".into(),
             save_submissions: false,
             output_truncate_length: 200,
+            toolchains: vec![
+                "gcc".into(),
+                "g++".into(),
+                "go".into(),
+                "java".into(),
+                "javac".into(),
+                "python3".into(),
+                "node".into(),
+            ],
+            binary_path_map: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -108,6 +127,18 @@ impl AijConfig {
         {
             self.output_truncate_length = val;
         }
+        if let Ok(val) = env::var("AIJ_TOOLCHAINS") {
+            self.toolchains = val
+                .split(',')
+                .filter_map(|s| {
+                    if s.trim().is_empty() {
+                        None
+                    } else {
+                        Some(s.trim().to_string())
+                    }
+                })
+                .collect();
+        }
         self
     }
 
@@ -117,5 +148,73 @@ impl AijConfig {
             "http://{}:{}{}",
             config.backend_host, config.backend_port, config.backend_prefix
         ))
+    }
+
+    pub(crate) async fn get_binary_path(bin_name: impl AsRef<str>) -> Result<PathBuf> {
+        let config = Self::get();
+        {
+            let map = config.binary_path_map.read().await;
+            if let Some(path) = map.get(bin_name.as_ref()) {
+                return Ok(path.clone());
+            }
+        }
+
+        warn!(
+            "Binary '{}' not found in pre-initialized map, searching in PATH",
+            bin_name.as_ref()
+        );
+        let bin_path = which::which(bin_name.as_ref());
+        if let Ok(path) = bin_path {
+            Self::update_binary_path_item(
+                bin_name.as_ref(),
+                path.clone(),
+                &mut config.binary_path_map.write().await,
+            );
+
+            Ok(path.clone())
+        } else {
+            Err(AijError::Config(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "BINARY_NOT_FOUND".into(),
+                format!("Binary '{}' not found in PATH", bin_name.as_ref()),
+            ))
+        }
+    }
+
+    pub(crate) async fn update_binary_path(&self) {
+        let config = AijConfig::get();
+        for bin in &config.toolchains {
+            if let Ok(path) = which::which(bin) {
+                Self::update_binary_path_item(bin, path, &mut self.binary_path_map.write().await);
+            } else {
+                error!("Binary '{}' specified in toolchains not found in PATH", bin);
+            }
+        }
+    }
+
+    fn update_binary_path_item(
+        name: impl AsRef<str>,
+        path: PathBuf,
+        bin_map: &mut RwLockWriteGuard<'_, HashMap<String, PathBuf>>,
+    ) {
+        match bin_map.insert(name.as_ref().to_string(), path.clone()) {
+            Some(existing_path) => {
+                if existing_path != path {
+                    warn!(
+                        "Binary '{}' path updated from '{}' to '{}'",
+                        name.as_ref(),
+                        existing_path.to_string_lossy(),
+                        path.to_string_lossy()
+                    );
+                }
+            }
+            None => {
+                info!(
+                    "Binary '{}' set at path: {}",
+                    name.as_ref(),
+                    path.to_string_lossy()
+                );
+            }
+        }
     }
 }
