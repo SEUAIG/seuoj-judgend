@@ -6,8 +6,8 @@
 
 use crate::config::AijConfig;
 use crate::server::{
-    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, serve_data_metadata,
-    serve_problem_file, upload_problem_data,
+    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, serve_problem_file,
+    upload_problem_data,
 };
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -33,7 +33,6 @@ pub fn app() -> Router {
             "/judge/problem/file/{pid}/{filename}",
             get(serve_problem_file),
         )
-        .route("/judge/problem/data/{pid}", get(serve_data_metadata))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
 }
 
