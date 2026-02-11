@@ -261,23 +261,6 @@ pub(crate) async fn write_to_file(path: impl AsRef<Path>, content: impl AsRef<[u
     })
 }
 
-pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<()> {
-    if !path.as_ref().exists() {
-        return Ok(());
-    }
-    tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
-        AijError::FileSystem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "REMOVE_FILE_FAILED".to_string(),
-            format!(
-                "Failed to remove file {}: {}",
-                path.as_ref().to_string_lossy(),
-                e
-            ),
-        )
-    })
-}
-
 pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
     let problem_dir = get_dir_by_problem_id(pid, false).await?;
     Ok(problem_dir.exists())

@@ -5,10 +5,7 @@
 //! SEU AIJ Judge-Endpoint
 
 use crate::config::AijConfig;
-use crate::server::{
-    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, serve_problem_file,
-    upload_problem_data,
-};
+use crate::server::{edit_problem_by_id, get_config_source, get_problem_by_id, judge_problem_by_id, serve_problem_file, upload_problem_data};
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post};
 use axum::Router;
@@ -29,6 +26,7 @@ pub fn app() -> Router {
         .route("/judge/submission", post(judge_problem_by_id))
         .route("/judge/problem/edit", patch(edit_problem_by_id))
         .route("/judge/problem/data/{pid}", post(upload_problem_data))
+        .route("/judge/problem/config/{pid}", get(get_config_source))
         .route(
             "/judge/problem/file/{pid}/{*filename}",
             get(serve_problem_file),

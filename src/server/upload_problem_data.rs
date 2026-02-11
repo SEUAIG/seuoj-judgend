@@ -1,5 +1,6 @@
 use crate::error::{AijError, Result};
 use crate::fs;
+use crate::judger::ProblemCase;
 use axum::extract::{Multipart, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -81,6 +82,8 @@ pub(crate) async fn upload_problem_data(
                             tmp_path,
                             data_path,
                         ).await?;
+                        let problem_case = ProblemCase::default();
+                        problem_case.save(&pid).await?;
                     }
                     Err(e) => {
                         error!("Failed to unzip file for problem id: {}", &pid);
