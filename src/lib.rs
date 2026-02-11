@@ -5,13 +5,10 @@
 //! SEU AIJ Judge-Endpoint
 
 use crate::config::AijConfig;
-use crate::server::{
-    edit_problem_by_id, get_problem_by_id, judge_problem_by_id, serve_data_metadata,
-    serve_problem_file, upload_problem_data,
-};
-use axum::Router;
+use crate::server::{edit_problem_by_id, get_config_source, get_problem_by_id, get_problem_tree, judge_problem_by_id, serve_problem_file, upload_problem_data};
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post};
+use axum::Router;
 use tokio::sync::OnceCell;
 
 pub mod config;
@@ -28,12 +25,13 @@ pub fn app() -> Router {
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))
         .route("/judge/problem/edit", patch(edit_problem_by_id))
-        .route("/judge/problem/data", post(upload_problem_data))
+        .route("/judge/problem/data/{pid}", post(upload_problem_data))
+        .route("/judge/problem/config/{pid}", get(get_config_source))
+        .route("/judge/problem/tree/{pid}", get(get_problem_tree))
         .route(
-            "/judge/problem/file/{pid}/{filename}",
+            "/judge/problem/file/{pid}/{*filename}",
             get(serve_problem_file),
         )
-        .route("/judge/problem/data/{pid}", get(serve_data_metadata))
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
 }
 

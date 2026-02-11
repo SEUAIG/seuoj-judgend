@@ -1,0 +1,3 @@
+problem_type = "Interactive"
+checker_type = "Standard"
+max_memory_byte = 1073741824
