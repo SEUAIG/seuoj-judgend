@@ -178,10 +178,6 @@ pub(crate) struct ProblemCase {
 }
 
 impl ProblemCase {
-    pub(crate) fn len(&self) -> usize {
-        self.test_cases.len()
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.test_cases.is_empty()
     }
@@ -218,20 +214,6 @@ impl ProblemCase {
         })?;
         let case_path = fs::get_path_by_id_name(pid.as_ref(), "data/case.toml", false).await?;
         fs::write_to_file(&case_path, &case_json).await
-    }
-
-    pub(crate) async fn clear_cases(&mut self, pid: impl AsRef<str>) -> Result<()> {
-        for case in &self.test_cases {
-            let in_path = fs::get_path_by_id_name(&pid, &case.in_name, false).await?;
-            fs::remove_file(&in_path).await?;
-
-            if let Some(ans_name) = &case.ans_name {
-                let ans_path = fs::get_path_by_id_name(&pid, ans_name, false).await?;
-                fs::remove_file(&ans_path).await?;
-            }
-        }
-        self.test_cases.clear();
-        Ok(())
     }
 }
 

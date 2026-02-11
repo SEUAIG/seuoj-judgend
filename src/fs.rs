@@ -302,3 +302,127 @@ pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     }
     Ok(())
 }
+
+pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: impl AsRef<Path> + Send) -> Result<()> {
+    let path_buf = path.as_ref().to_path_buf();
+    let bytes_vec = bytes.as_ref().to_vec();
+
+    tokio::task::spawn_blocking(move || {
+        let reader = std::io::Cursor::new(bytes_vec);
+        let mut zip = zip::ZipArchive::new(reader).map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::BAD_REQUEST,
+                "INVALID_ZIP_FILE".to_string(),
+                format!("Failed to read zip file: {}", e),
+            )
+        })?;
+
+        let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$").map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "REGEX_COMPILE_FAILED".to_string(),
+                format!("Failed to compile regex: {}", e),
+            )
+        })?;
+
+        for i in 0..zip.len() {
+            let mut file = zip.by_index(i).map_err(|e| {
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "ZIP_READ_ERROR".to_string(),
+                    format!("Failed to read zip entry: {}", e),
+                )
+            })?;
+
+            if !regex.is_match(file.name()) {
+                return Err(AijError::Request(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_ZIP_ENTRY_NAME".to_string(),
+                    format!("Invalid zip entry name: {}", file.name()),
+                ));
+            }
+
+            let out_path = path_buf.join(file.mangled_name());
+
+            if file.is_dir() {
+                std::fs::create_dir_all(&out_path).map_err(|e| {
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "DIR_CREATE_FAILED".to_string(),
+                        format!("Failed to create directory {}: {}", out_path.to_string_lossy(), e),
+                    )
+                })?;
+            } else {
+                if let Some(parent) = out_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| {
+                        AijError::FileSystem(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "DIR_CREATE_FAILED".to_string(),
+                            format!("Failed to create parent directory: {}", e),
+                        )
+                    })?;
+                }
+
+                let mut out_file = std::fs::File::create(&out_path).map_err(|e| {
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "FILE_CREATE_FAILED".to_string(),
+                        format!("Failed to create file {}: {}", out_path.to_string_lossy(), e),
+                    )
+                })?;
+
+                // 这里使用同步的 std::io::copy
+                std::io::copy(&mut file, &mut out_file).map_err(|e| {
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "FILE_WRITE_FAILED".to_string(),
+                        format!("Failed to write file {}: {}", out_path.to_string_lossy(), e),
+                    )
+                })?;
+            }
+        }
+        Ok(())
+    })
+        .await
+        .map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "TASK_JOIN_FAILED".to_string(),
+                format!("Blocking task failed: {}", e),
+            )
+        })?
+}
+
+
+pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> Result<()> {
+    if path.as_ref().exists() {
+        tokio::fs::remove_dir_all(path.as_ref()).await.map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "REMOVE_DIR_FAILED".to_string(),
+                format!(
+                    "Failed to remove directory {}: {}",
+                    path.as_ref().to_string_lossy(),
+                    e
+                ),
+            )
+        })?;
+    }
+    Ok(())
+}
+
+
+pub(crate) async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
+    tokio::fs::rename(from.as_ref(), to.as_ref()).await.map_err(|e| {
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "RENAME_FAILED".to_string(),
+            format!(
+                "Failed to rename from {} to {}: {}",
+                from.as_ref().to_string_lossy(),
+                to.as_ref().to_string_lossy(),
+                e
+            ),
+        )
+    })
+}
