@@ -7,10 +7,7 @@ mod utils;
 async fn test_upload_problem_data() {
     let server = get_test_server().await;
 
-    std::fs::write(
-        "./1.in",
-        b"1 2 3\n",
-    ).expect("Failed to write test input file");
+    std::fs::write("./1.in", b"1 2 3\n").expect("Failed to write test input file");
 
     std::process::Command::new("zip")
         .arg("data.zip")
@@ -30,12 +27,18 @@ async fn test_upload_problem_data() {
 
     response.assert_status_ok();
 
-    let data_1_in_content = std::fs::read_to_string("./assets/problems/1/data/1.in").expect("Failed to read test input file after upload");
+    let data_1_in_content = std::fs::read_to_string("./assets/problems/1/data/1.in")
+        .expect("Failed to read test input file after upload");
     assert_eq!(data_1_in_content, "1 2 3\n");
 
     std::fs::remove_file("./1.in").expect("Failed to remove test input file");
     std::fs::remove_file("./data.zip").expect("Failed to remove zip file");
-    std::fs::write("./assets/problems/1/data/1.in", "1 2").expect("Failed to reset test input file");
+    std::fs::write("./assets/problems/1/data/1.in", "1 2")
+        .expect("Failed to reset test input file");
     std::fs::write("./assets/problems/1/data/1.ans", "3").expect("Failed to reset test input file");
-    std::fs::write("./assets/problems/1/data/case.toml", "[[test_cases]]\nid = 1\nin_name = '1.in'\nans_name = '1.ans'\n").expect("Failed to reset test input file");
+    std::fs::write(
+        "./assets/problems/1/data/case.toml",
+        "[[test_cases]]\nid = 1\nin_name = '1.in'\nans_name = '1.ans'\n",
+    )
+    .expect("Failed to reset test input file");
 }

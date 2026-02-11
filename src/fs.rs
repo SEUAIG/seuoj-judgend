@@ -277,7 +277,6 @@ pub(crate) async fn assert_problem_exists(pid: impl AsRef<str>) -> Result<()> {
     Ok(())
 }
 
-
 pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let filename = filename.as_ref();
     let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*(\.[a-zA-Z0-9_-]+)*$")
@@ -298,7 +297,10 @@ pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: impl AsRef<Path> + Send) -> Result<()> {
+pub(crate) async fn unzip_bytes_to_path(
+    bytes: impl AsRef<[u8]> + Send,
+    path: impl AsRef<Path> + Send,
+) -> Result<()> {
     let path_buf = path.as_ref().to_path_buf();
     let bytes_vec = bytes.as_ref().to_vec();
 
@@ -344,7 +346,11 @@ pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: im
                     AijError::FileSystem(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "DIR_CREATE_FAILED".to_string(),
-                        format!("Failed to create directory {}: {}", out_path.to_string_lossy(), e),
+                        format!(
+                            "Failed to create directory {}: {}",
+                            out_path.to_string_lossy(),
+                            e
+                        ),
                     )
                 })?;
             } else {
@@ -362,7 +368,11 @@ pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: im
                     AijError::FileSystem(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "FILE_CREATE_FAILED".to_string(),
-                        format!("Failed to create file {}: {}", out_path.to_string_lossy(), e),
+                        format!(
+                            "Failed to create file {}: {}",
+                            out_path.to_string_lossy(),
+                            e
+                        ),
                     )
                 })?;
 
@@ -377,46 +387,48 @@ pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: im
         }
         Ok(())
     })
-        .await
-        .map_err(|e| {
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "TASK_JOIN_FAILED".to_string(),
-                format!("Blocking task failed: {}", e),
-            )
-        })?
+    .await
+    .map_err(|e| {
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "TASK_JOIN_FAILED".to_string(),
+            format!("Blocking task failed: {}", e),
+        )
+    })?
 }
-
 
 pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> Result<()> {
     if path.as_ref().exists() {
-        tokio::fs::remove_dir_all(path.as_ref()).await.map_err(|e| {
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "REMOVE_DIR_FAILED".to_string(),
-                format!(
-                    "Failed to remove directory {}: {}",
-                    path.as_ref().to_string_lossy(),
-                    e
-                ),
-            )
-        })?;
+        tokio::fs::remove_dir_all(path.as_ref())
+            .await
+            .map_err(|e| {
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "REMOVE_DIR_FAILED".to_string(),
+                    format!(
+                        "Failed to remove directory {}: {}",
+                        path.as_ref().to_string_lossy(),
+                        e
+                    ),
+                )
+            })?;
     }
     Ok(())
 }
 
-
 pub(crate) async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
-    tokio::fs::rename(from.as_ref(), to.as_ref()).await.map_err(|e| {
-        AijError::FileSystem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "RENAME_FAILED".to_string(),
-            format!(
-                "Failed to rename from {} to {}: {}",
-                from.as_ref().to_string_lossy(),
-                to.as_ref().to_string_lossy(),
-                e
-            ),
-        )
-    })
+    tokio::fs::rename(from.as_ref(), to.as_ref())
+        .await
+        .map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "RENAME_FAILED".to_string(),
+                format!(
+                    "Failed to rename from {} to {}: {}",
+                    from.as_ref().to_string_lossy(),
+                    to.as_ref().to_string_lossy(),
+                    e
+                ),
+            )
+        })
 }

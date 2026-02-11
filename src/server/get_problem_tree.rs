@@ -1,9 +1,9 @@
 use crate::error::{AijError, Result};
 use crate::fs;
+use axum::Json;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use tracing::{error, info};
 
 use serde::Serialize;
@@ -21,10 +21,11 @@ pub enum FileNode {
     },
 }
 
-pub(crate) async fn get_problem_tree(
-    Path(pid): Path<String>,
-) -> Result<impl IntoResponse> {
-    info!("Received request to get problem tree for problem ID: {}", pid);
+pub(crate) async fn get_problem_tree(Path(pid): Path<String>) -> Result<impl IntoResponse> {
+    info!(
+        "Received request to get problem tree for problem ID: {}",
+        pid
+    );
 
     fs::assert_problem_exists(&pid).await?;
 
@@ -76,7 +77,6 @@ pub fn build_tree(path: &std::path::Path) -> Option<Vec<FileNode>> {
             }
         }
     }
-
 
     Some(nodes)
 }

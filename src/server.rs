@@ -1,18 +1,18 @@
 //! Server-related functionalities for the AI Judge system.
 
 mod edit_problem_by_id;
+mod get_config_source;
 mod get_problem_by_id;
+mod get_problem_tree;
 mod judge_problem_by_id;
 mod serve_problem_file;
 mod upload_problem_data;
-mod get_config_source;
-mod get_problem_tree;
 
 use crate::config::AijConfig;
+use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
-use axum::Json;
 use serde_json::json;
 use std::sync::OnceLock;
 use tokio::sync::Semaphore;
@@ -31,7 +31,7 @@ pub(crate) struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
 where
-    Json<T>: FromRequest<S, Rejection=JsonRejection>,
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);

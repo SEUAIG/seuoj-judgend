@@ -5,7 +5,7 @@ use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 pub(crate) use crate::judger::utils::{
-    compile, CheckerType, ProblemCase, ProblemInfo, ProblemType,
+    CheckerType, ProblemCase, ProblemInfo, ProblemType, compile,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -88,13 +88,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -249,7 +249,7 @@ pub(crate) async fn judge(
                     })?),
                     true,
                 )
-                    .await?
+                .await?
             }
             ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
         };
@@ -310,7 +310,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                        .await?;
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }

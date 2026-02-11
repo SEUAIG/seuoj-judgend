@@ -14,6 +14,10 @@ async fn test_get_config_source() {
     println!("Response JSON: {}", json);
     assert_eq!(json["code"], 0);
     assert_eq!(json["message"], "Success");
-    let case_config_content = std::fs::read_to_string("./assets/problems/1/data/case.toml").expect("Failed to read case.toml");
-    assert_eq!(json["data"]["config"].as_str().unwrap(), case_config_content);
+    let case_config_content = std::fs::read_to_string("./assets/problems/1/data/case.toml")
+        .expect("Failed to read case.toml");
+    assert_eq!(
+        json["data"]["config"].as_str().unwrap(),
+        case_config_content
+    );
 }
