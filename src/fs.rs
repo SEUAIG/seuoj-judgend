@@ -366,7 +366,6 @@ pub(crate) async fn unzip_bytes_to_path(bytes: impl AsRef<[u8]> + Send, path: im
                     )
                 })?;
 
-                // 这里使用同步的 std::io::copy
                 std::io::copy(&mut file, &mut out_file).map_err(|e| {
                     AijError::FileSystem(
                         StatusCode::INTERNAL_SERVER_ERROR,
