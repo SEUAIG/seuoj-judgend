@@ -266,6 +266,18 @@ pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
     Ok(problem_dir.exists())
 }
 
+pub(crate) async fn assert_problem_exists(pid: impl AsRef<str>) -> Result<()> {
+    if !check_problem_exists(&pid).await? {
+        return Err(AijError::FileSystem(
+            StatusCode::NOT_FOUND,
+            "PROBLEM_NOT_FOUND".to_string(),
+            format!("Problem with ID {} does not exist", pid.as_ref()),
+        ));
+    }
+    Ok(())
+}
+
+
 pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let filename = filename.as_ref();
     let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*(\.[a-zA-Z0-9_-]+)*$")

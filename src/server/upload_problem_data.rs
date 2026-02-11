@@ -14,14 +14,8 @@ pub(crate) async fn upload_problem_data(
 ) -> Result<impl IntoResponse> {
     info!("Uploading test cases for problem id: {}", &pid);
 
-    if !fs::check_problem_exists(&pid).await? {
-        error!("Problem ID {} does not exist", &pid);
-        return Err(AijError::FileSystem(
-            StatusCode::BAD_REQUEST,
-            "PROBLEM_NOT_FOUND".to_string(),
-            format!("Problem with ID {} does not exist", &pid),
-        ));
-    }
+    fs::assert_problem_exists(&pid).await?;
+    
     let mut file = None;
     let mut format = None;
 
