@@ -5,7 +5,7 @@ use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
 pub(crate) use crate::judger::utils::{
-    CheckerType, ProblemCase, ProblemInfo, ProblemType, compile,
+    compile, CheckerType, ProblemCase, ProblemInfo, ProblemType,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -88,13 +88,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "COMPILE_ERROR".to_string(),
-                    format!("Failed to compile source code: {}", e),
-                )
-            })?;
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -231,13 +231,13 @@ pub(crate) async fn judge(
             ),
         )
     })?;
-    for case in case_info.0 {
-        let input_path = get_path_by_id_name(&pid, case.in_name, true).await?;
-        let ans_path =
-            match problem_type {
-                ProblemType::Standard => get_path_by_id_name(
+    for case in case_info.test_cases {
+        let input_path = get_path_by_id_name(&pid, format!("data/{}", case.in_name), true).await?;
+        let ans_path = match problem_type {
+            ProblemType::Standard => {
+                get_path_by_id_name(
                     &pid,
-                    case.ans_name.ok_or_else(|| {
+                    format!("data/{}", case.ans_name.ok_or_else(|| {
                         AijError::Judge(
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "ANSWER_FILE_NAME_NOT_SPECIFIED".to_string(),
@@ -246,12 +246,13 @@ pub(crate) async fn judge(
                                 case.id, pid
                             ),
                         )
-                    })?,
+                    })?),
                     true,
                 )
-                .await?,
-                ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
-            };
+                    .await?
+            }
+            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
+        };
         let mut config = config.clone();
         config.exe_path = exec_path.clone();
         config.args = args.clone();
@@ -309,7 +310,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                    .await?;
+                        .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
@@ -404,6 +405,6 @@ mod tests {
         let cases = ProblemCase::from_pid(pid).await;
         assert!(cases.is_ok());
         let cases = cases.unwrap();
-        assert_eq!(cases.0.len(), 1);
+        assert_eq!(cases.test_cases.len(), 1);
     }
 }

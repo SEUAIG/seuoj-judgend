@@ -285,13 +285,14 @@ pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
 
 pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let filename = filename.as_ref();
-    let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$").map_err(|e| {
-        AijError::FileSystem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "REGEX_COMPILE_FAILED".to_string(),
-            format!("Failed to compile regex: {}", e),
-        )
-    })?;
+    let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*(\.[a-zA-Z0-9_-]+)*$")
+        .map_err(|e| {
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "REGEX_COMPILE_FAILED".to_string(),
+                format!("Failed to compile regex: {}", e),
+            )
+        })?;
     if filename.is_empty() || !regex.is_match(filename) {
         return Err(AijError::Request(
             StatusCode::BAD_REQUEST,

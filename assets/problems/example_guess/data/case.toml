@@ -1,0 +1,19 @@
+[[test_cases]]
+id = 1
+in_name = "1.in"
+
+[[test_cases]]
+id = 2
+in_name = "2.in"
+
+[[test_cases]]
+id = 3
+in_name = "3.in"
+
+[[test_cases]]
+id = 4
+in_name = "4.in"
+
+[[test_cases]]
+id = 5
+in_name = "5.in"

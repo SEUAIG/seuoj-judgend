@@ -17,6 +17,8 @@ base64 = "0.22.1"
 regex = "1.12.2"
 tokio-util = "0.7.18"
 which = "8.0.0"
+toml = "0.5.11"
+
 
 [dev-dependencies]
 axum-test = "18.7.0"

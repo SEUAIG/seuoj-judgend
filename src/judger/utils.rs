@@ -60,13 +60,13 @@ impl Display for ProblemType {
 
 impl ProblemInfo {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
-        let content = fs::read_file_by_id_name(&pid, "info.json").await?;
-        let info: ProblemInfo = serde_json::from_str(&content).map_err(|e| {
+        let content = fs::read_file_by_id_name(&pid, "info.toml").await?;
+        let info: ProblemInfo = toml::from_str(&content).map_err(|e| {
             AijError::FileSystem(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "FAILED_PARSE_PROBLEM_INFO".to_string(),
                 format!(
-                    "Failed to parse info.json for problem {}: {}",
+                    "Failed to parse info.toml for problem {}: {}",
                     pid.as_ref(),
                     e
                 ),
@@ -154,7 +154,7 @@ impl ProblemInfo {
     }
 
     pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
-        let info_json = serde_json::to_string_pretty(&self).map_err(|e| {
+        let info_json = toml::to_string_pretty(&self).map_err(|e| {
             error!(
                 "Failed to serialize problem info for problem id {}: {}",
                 pid.as_ref(),
@@ -166,43 +166,45 @@ impl ProblemInfo {
                 format!("Failed to serialize problem info: {}", e),
             )
         })?;
-        let info_path = fs::get_path_by_id_name(pid.as_ref(), "info.json", false).await?;
+        let info_path = fs::get_path_by_id_name(pid.as_ref(), "info.toml", false).await?;
         fs::write_to_file(&info_path, &info_json).await
     }
 }
 
 /// A collection of problem cases
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct ProblemCase(pub(crate) Vec<Case>);
+pub(crate) struct ProblemCase {
+    pub(crate) test_cases: Vec<Case>,
+}
 
 impl ProblemCase {
     pub(crate) fn len(&self) -> usize {
-        self.0.len()
+        self.test_cases.len()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.test_cases.is_empty()
     }
 
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
-        let content = fs::read_file_by_id_name(&pid, "case.json").await?;
-        let mut cases: Vec<Case> = serde_json::from_str(&content).map_err(|e| {
+        let content = fs::read_file_by_id_name(&pid, "data/case.toml").await?;
+        let mut cases: Self = toml::from_str(&content).map_err(|e| {
             AijError::FileSystem(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "FAILED_PARSE_PROBLEM_CASES".to_string(),
                 format!(
-                    "Failed to parse case.json for problem {}: {}",
+                    "Failed to parse case.toml for problem {}: {}",
                     pid.as_ref(),
                     e
                 ),
             )
         })?;
-        cases.sort_unstable_by_key(|x| x.id);
-        Ok(ProblemCase(cases))
+        cases.test_cases.sort_unstable_by_key(|x| x.id);
+        Ok(cases)
     }
 
     pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
-        let case_json = serde_json::to_string_pretty(&self.0).map_err(|e| {
+        let case_json = toml::to_string_pretty(&self).map_err(|e| {
             error!(
                 "Failed to serialize problem cases for problem id {}: {}",
                 pid.as_ref(),
@@ -214,12 +216,12 @@ impl ProblemCase {
                 format!("Failed to serialize problem cases: {}", e),
             )
         })?;
-        let case_path = fs::get_path_by_id_name(pid.as_ref(), "case.json", false).await?;
+        let case_path = fs::get_path_by_id_name(pid.as_ref(), "data/case.toml", false).await?;
         fs::write_to_file(&case_path, &case_json).await
     }
 
     pub(crate) async fn clear_cases(&mut self, pid: impl AsRef<str>) -> Result<()> {
-        for case in &self.0 {
+        for case in &self.test_cases {
             let in_path = fs::get_path_by_id_name(&pid, &case.in_name, false).await?;
             fs::remove_file(&in_path).await?;
 
@@ -228,7 +230,7 @@ impl ProblemCase {
                 fs::remove_file(&ans_path).await?;
             }
         }
-        self.0.clear();
+        self.test_cases.clear();
         Ok(())
     }
 }

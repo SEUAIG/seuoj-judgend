@@ -30,7 +30,7 @@ pub fn app() -> Router {
         .route("/judge/problem/edit", patch(edit_problem_by_id))
         .route("/judge/problem/data", post(upload_problem_data))
         .route(
-            "/judge/problem/file/{pid}/{filename}",
+            "/judge/problem/file/{pid}/{*filename}",
             get(serve_problem_file),
         )
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB

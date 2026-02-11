@@ -3,9 +3,9 @@ use crate::fs;
 use crate::fs::Case;
 use crate::judger::{ProblemCase, ProblemInfo, ProblemType};
 use crate::server::AppJson;
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
@@ -96,7 +96,7 @@ pub(crate) async fn upload_problem_data(
         tc.ans = None;
     }
 
-    case_info.0 = payload.testcase;
+    case_info.test_cases = payload.testcase;
     case_info.save(&payload.pid).await?;
 
     info!(
