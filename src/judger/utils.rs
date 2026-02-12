@@ -12,6 +12,7 @@ use tracing::error;
 
 /// Information about a problem
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ProblemInfo {
     /// Maximum CPU time in milliseconds (-1 for unlimited).
     pub(crate) max_cpu_time_ms: Option<i32>,
@@ -61,15 +62,15 @@ impl Display for ProblemType {
 impl ProblemInfo {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "info.toml").await?;
-        let info: ProblemInfo = toml::from_str(&content).map_err(|e| {
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
+        Self::from_toml_str(content)
+    }
+
+    pub(crate) fn from_toml_str(toml_str: impl AsRef<str>) -> Result<Self> {
+        let info: ProblemInfo = toml::from_str(toml_str.as_ref()).map_err(|e| {
+            AijError::Request(
+                StatusCode::BAD_REQUEST,
                 "FAILED_PARSE_PROBLEM_INFO".to_string(),
-                format!(
-                    "Failed to parse info.toml for problem {}: {}",
-                    pid.as_ref(),
-                    e
-                ),
+                format!("Failed to parse problem info from TOML string: {}", e),
             )
         })?;
         Ok(info.apply_defaults())
@@ -173,6 +174,7 @@ impl ProblemInfo {
 
 /// A collection of problem cases
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ProblemCase {
     pub(crate) test_cases: Vec<Case>,
 }
@@ -184,15 +186,15 @@ impl ProblemCase {
 
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "data/case.toml").await?;
-        let mut cases: Self = toml::from_str(&content).map_err(|e| {
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
+        Self::from_toml_str(content)
+    }
+
+    pub(crate) fn from_toml_str(toml_str: impl AsRef<str>) -> Result<Self> {
+        let mut cases: Self = toml::from_str(toml_str.as_ref()).map_err(|e| {
+            AijError::Request(
+                StatusCode::BAD_REQUEST,
                 "FAILED_PARSE_PROBLEM_CASES".to_string(),
-                format!(
-                    "Failed to parse case.toml for problem {}: {}",
-                    pid.as_ref(),
-                    e
-                ),
+                format!("Failed to parse problem cases from TOML string: {}", e),
             )
         })?;
         cases.test_cases.sort_unstable_by_key(|x| x.id);

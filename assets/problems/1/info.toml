@@ -4,5 +4,5 @@ max_memory_byte = 1073741824
 max_stack_byte = 33554432
 max_process_number = 1
 max_output_size = 1000000
-problem_type = "Standard"
-checker_type = "Special"
+problem_type = 'Standard'
+checker_type = 'Special'
