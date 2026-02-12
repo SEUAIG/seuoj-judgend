@@ -6,11 +6,11 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{error, info};
+use tracing::info;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ConfigQuery {
-    r#type: String,
+    pub(crate) r#type: String,
 }
 
 pub(crate) async fn get_config_source(
@@ -23,14 +23,7 @@ pub(crate) async fn get_config_source(
         &r#type, &pid
     );
 
-    if !fs::check_problem_exists(&pid).await? {
-        error!("Problem with id '{}' not found", pid);
-        return Err(crate::error::AijError::Request(
-            StatusCode::NOT_FOUND,
-            "PROBLEM_NOT_FOUND".to_string(),
-            format!("Problem with id '{}' not found", pid),
-        ));
-    }
+    fs::assert_problem_exists(&pid).await?;
 
     match r#type.as_str() {
         "META" => {
