@@ -62,14 +62,11 @@ impl Display for ProblemType {
 impl ProblemInfo {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "info.toml").await?;
-        Self::from_toml_str(content).map_err(|e| {
-            match e {
-                AijError::Request(_, short, long) => AijError::FileSystem(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    short, long,
-                ),
-                _ => e,
+        Self::from_toml_str(content).map_err(|e| match e {
+            AijError::Request(_, short, long) => {
+                AijError::FileSystem(StatusCode::INTERNAL_SERVER_ERROR, short, long)
             }
+            _ => e,
         })
     }
 
@@ -194,14 +191,11 @@ impl ProblemCase {
 
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
         let content = fs::read_file_by_id_name(&pid, "data/case.toml").await?;
-        Self::from_toml_str(content).map_err(|e| {
-            match e {
-                AijError::Request(_, short, long) => AijError::FileSystem(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    short, long,
-                ),
-                _ => e,
+        Self::from_toml_str(content).map_err(|e| match e {
+            AijError::Request(_, short, long) => {
+                AijError::FileSystem(StatusCode::INTERNAL_SERVER_ERROR, short, long)
             }
+            _ => e,
         })
     }
 

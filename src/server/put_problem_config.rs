@@ -6,6 +6,7 @@ use axum::Json;
 use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
 use serde_json::json;
+use std::collections::HashSet;
 use tracing::info;
 
 pub(crate) async fn put_problem_config(
@@ -28,6 +29,24 @@ pub(crate) async fn put_problem_config(
         }
         "CASE" => {
             let problem_case = ProblemCase::from_toml_str(&body)?;
+            let mut existing_id = HashSet::new();
+            for case in &problem_case.test_cases {
+                if !existing_id.insert(&case.id) {
+                    return Err(crate::error::AijError::Request(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "DUPLICATE_TEST_CASE_ID".to_string(),
+                        format!("Duplicate test case ID: {}", case.id),
+                    ));
+                }
+                fs::validate_filename(&case.in_name)?;
+                let _ =
+                    fs::get_path_by_id_name(&pid, format!("data/{}", case.in_name), true).await?;
+                if let Some(ans_name) = &case.ans_name {
+                    fs::validate_filename(ans_name)?;
+                    let _ =
+                        fs::get_path_by_id_name(&pid, format!("data/{}", ans_name), true).await?;
+                }
+            }
             problem_case.save(&pid).await?;
         }
         _ => {
