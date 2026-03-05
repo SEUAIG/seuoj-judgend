@@ -19,6 +19,7 @@ pub mod error;
 pub mod fs;
 pub mod judger;
 pub mod logger;
+pub mod schema;
 pub mod server;
 
 /// Create the Axum application with defined routes.

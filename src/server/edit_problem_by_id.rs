@@ -1,31 +1,15 @@
 use crate::error::Result;
 use crate::fs;
 use crate::fs::check_problem_exists;
-use crate::judger::{CheckerType, ProblemCase, ProblemInfo, ProblemType};
+use crate::schema::{ProblemExample, ProblemMetadata};
 use crate::server::AppJson;
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use base64::Engine;
-use base64::engine::general_purpose;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
 
-/// Program type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-enum ProgramType {
-    #[serde(rename = "Binary")]
-    Base64Binary,
-    Source,
-}
-
-/// Interactor information for a problem.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Program {
-    r#type: ProgramType,
-    data: String,
-}
 
 /// Option Problem metadata and description.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,11 +17,9 @@ pub(crate) struct OptionProblem {
     pid: String,
     description: Option<String>,
     input: Option<String>,
-    output: Option<String>,
+    answer: Option<String>,
     example: Option<Vec<OptionSample>>,
-    info: Option<ProblemInfo>,
-    interactor: Option<Program>,
-    checker: Option<Program>,
+    hint: Option<String>,
 }
 
 /// Option Sample input/output pair for a problem.
@@ -59,9 +41,13 @@ impl OptionProblem {
             warn!("Input is missing for problem id: {}", self.pid);
             return Err("Input is missing".to_string());
         }
-        if self.output.is_none() {
+        if self.answer.is_none() {
             warn!("Output is missing for problem id: {}", self.pid);
             return Err("Output is missing".to_string());
+        }
+        if self.hint.is_none() {
+            warn!("Hint is missing for problem id: {}", self.pid);
+            return Err("Hint is missing".to_string());
         }
         if let Some(example) = &self.example {
             for (index, sample) in example.iter().enumerate() {
@@ -78,153 +64,79 @@ impl OptionProblem {
             warn!("Examples are missing for problem id: {}", self.pid);
             return Err("Examples are missing".to_string());
         }
-        if let Some(info) = &self.info {
-            if info.problem_type == Some(ProblemType::Interactive) && self.interactor.is_none() {
-                warn!(
-                    "Interactor is missing for interactive problem id: {}",
-                    self.pid
-                );
-                return Err("Interactor program is missing for interactive problem".to_string());
-            }
-            if info.checker_type == Some(CheckerType::Special) && self.checker.is_none() {
-                warn!(
-                    "Checker is missing for special judge problem id: {}",
-                    self.pid
-                );
-                return Err("Checker program is missing for special judge problem".to_string());
-            }
-        }
         Ok(())
     }
 }
 
 pub(crate) async fn edit_problem_by_id(
-    AppJson(payload): AppJson<OptionProblem>,
+    AppJson(mut payload): AppJson<OptionProblem>,
 ) -> Result<impl IntoResponse> {
     let problem_id = &payload.pid;
     info!("Received edit problem request: pid={}", problem_id,);
     let is_new = !check_problem_exists(problem_id).await?;
+
     if is_new {
-        info!("Creating new problem with id: {}", &problem_id);
         payload.check_complete().map_err(|e| {
-            error!("Invalid payload for new problem id {}: {}", problem_id, e);
+            error!("Validation failed for new problem: {}", e);
             crate::error::AijError::Request(
                 StatusCode::BAD_REQUEST,
-                "INVALID_PAYLOAD".to_string(),
-                format!("Invalid payload for new problem: {}", e),
+                "INCOMPLETE_PROBLEM_DATA".to_string(),
+                format!("Validation failed for new problem: {}", e),
             )
         })?;
+    }
 
-        let case_info = ProblemCase::default();
-        case_info.save(problem_id).await?;
-        info!("Created default case info for problem id: {}", problem_id);
-    }
-    if let Some(description) = &payload.description {
-        let path = fs::get_path_by_id_name(problem_id, "description.md", false).await?;
-        fs::write_to_file(&path, description).await?;
-    }
-    if let Some(input) = &payload.input {
-        let path = fs::get_path_by_id_name(problem_id, "input.md", false).await?;
-        fs::write_to_file(&path, input).await?;
-    }
-    if let Some(output) = &payload.output {
-        let path = fs::get_path_by_id_name(problem_id, "output.md", false).await?;
-        fs::write_to_file(&path, output).await?;
-    }
-    if let Some(example) = &payload.example {
-        for (index, sample) in example.iter().enumerate() {
-            if let Some(r#in) = &sample.r#in {
-                let path = fs::get_path_by_id_name(
-                    problem_id,
-                    &format!("example_{}.in", index + 1),
-                    false,
-                )
-                .await?;
-                fs::write_to_file(&path, r#in).await?;
-            }
-            if let Some(ans) = &sample.ans {
-                let path = fs::get_path_by_id_name(
-                    problem_id,
-                    &format!("example_{}.ans", index + 1),
-                    false,
-                )
-                .await?;
-                fs::write_to_file(&path, ans).await?;
-            }
-            if let Some(description) = &sample.description {
-                let path = fs::get_path_by_id_name(
-                    problem_id,
-                    &format!("example_{}.md", index + 1),
-                    false,
-                )
-                .await?;
-                fs::write_to_file(&path, description).await?;
-            }
+
+    // Handle problem metadata (problem.json)
+    // Read existing metadata if it exists
+    let mut metadata = if !is_new && let Ok(content) = fs::read_file_by_id_name(problem_id, "problem.json").await {
+        // Try to read existing problem.json
+        serde_json::from_str::<ProblemMetadata>(&content).map_err(|e| {
+            error!("Failed to parse existing problem.json: {}", e);
+            crate::error::AijError::Request(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "FAILED_PARSE_PROBLEM_METADATA".to_string(),
+                format!("Failed to parse existing problem.json: {}", e),
+            )
+        })?
+    } else {
+        ProblemMetadata {
+            pid: problem_id.clone(),
+            ..Default::default()
         }
+    };
+    if let Some(description) = payload.description.take() {
+        metadata.description = description;
     }
-    if let Some(info) = payload.info {
-        if is_new {
-            info
-        } else {
-            let mut problem_info = ProblemInfo::from_pid(problem_id).await?;
-            problem_info.update_from_option(&info);
-            problem_info
-        }
-        .save(problem_id)
-        .await?;
+    if let Some(input) = payload.input.take() {
+        metadata.input = input;
     }
-    if let Some(interactor) = &payload.interactor {
-        match interactor.r#type {
-            ProgramType::Base64Binary => {
-                let path = fs::get_path_by_id_name(problem_id, "interactor", false).await?;
-                let data = general_purpose::STANDARD
-                    .decode(&interactor.data)
-                    .map_err(|e| {
-                        error!(
-                            "Failed to decode interactor base64 data for problem id {}: {}",
-                            problem_id, e
-                        );
-                        crate::error::AijError::Request(
-                            StatusCode::BAD_REQUEST,
-                            "INVALID_BASE64".to_string(),
-                            format!("Failed to decode interactor base64 data: {}", e),
-                        )
-                    })?;
-                fs::write_to_file(&path, &data).await?;
-            }
-            ProgramType::Source => {
-                let path = fs::get_path_by_id_name(problem_id, "interactor.cpp", false).await?;
-                fs::write_to_file(&path, &interactor.data).await?;
-                crate::judger::compile(&path).await?;
-            }
-        }
+    if let Some(output) = payload.answer.take() {
+        metadata.output = output;
     }
-    if let Some(checker) = &payload.checker {
-        match checker.r#type {
-            ProgramType::Base64Binary => {
-                let path = fs::get_path_by_id_name(problem_id, "checker", false).await?;
-                let data = general_purpose::STANDARD
-                    .decode(&checker.data)
-                    .map_err(|e| {
-                        error!(
-                            "Failed to decode checker base64 data for problem id {}: {}",
-                            problem_id, e
-                        );
-                        crate::error::AijError::Request(
-                            StatusCode::BAD_REQUEST,
-                            "INVALID_BASE64".to_string(),
-                            format!("Failed to decode checker base64 data: {}", e),
-                        )
-                    })?;
-                fs::write_to_file(&path, &data).await?;
-            }
-            ProgramType::Source => {
-                let path = fs::get_path_by_id_name(problem_id, "checker.cpp", false).await?;
-                fs::write_to_file(&path, &checker.data).await?;
-                crate::judger::compile(&path).await?;
-            }
-        }
+    if let Some(hint) = payload.hint.take() {
+        metadata.hint = hint;
     }
+    if let Some(example) = payload.example.take() {
+        metadata.example = example.into_iter().map(|sample| {
+            ProblemExample {
+                r#in: sample.r#in.unwrap_or_default(),
+                ans: sample.ans.unwrap_or_default(),
+                description: sample.description.unwrap_or_default(),
+            }
+        }).collect();
+    }
+
+    let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|e| {
+        error!("Failed to serialize problem metadata: {}", e);
+        crate::error::AijError::Request(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "FAILED_SERIALIZE_PROBLEM_METADATA".to_string(),
+            format!("Failed to serialize problem metadata: {}", e),
+        )
+    })?;
+    let metadata_path = fs::get_path_by_id_name(problem_id, "problem.json", false).await?;
+    fs::write_to_file(&metadata_path, metadata_json).await?;
 
     info!(
         "Successfully {} problem with id: {}",

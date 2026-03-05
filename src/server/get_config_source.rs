@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::fs;
-use axum::Json;
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 use tracing::info;
@@ -27,13 +27,13 @@ pub(crate) async fn get_config_source(
 
     match r#type.as_str() {
         "META" => {
-            let content = fs::read_file_by_id_name(&pid, "info.toml").await?;
+            let content = fs::read_file_by_id_name(&pid, "problem.json").await?;
             Ok(Json(
                 json!({ "code": 0, "message": "Success", "data": {"config": content} }),
             ))
         }
-        "CASE" => {
-            let content = fs::read_file_by_id_name(&pid, "data/case.toml")
+        "INFO" => {
+            let content = fs::read_file_by_id_name(&pid, "info.toml")
                 .await
                 .unwrap_or_default();
             Ok(Json(

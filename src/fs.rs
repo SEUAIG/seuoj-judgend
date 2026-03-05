@@ -1,9 +1,8 @@
 //! File system operations for reading and writing problem and submission data.
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
-use crate::judger::ProblemInfo;
+use crate::schema::ProblemMetadata;
 use axum::http::StatusCode;
-use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 use tokio::sync::OnceCell;
@@ -47,66 +46,9 @@ impl FileSystem {
     }
 }
 
-/// Test case input/output pair for a problem.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Case {
-    pub(crate) id: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) r#in: Option<String>,
-    pub(crate) in_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) ans: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) ans_name: Option<String>,
-}
 
-/// Sample input/output pair for a problem.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Sample {
-    pub(crate) r#in: String,
-    pub(crate) ans: String,
-    pub(crate) description: String,
-}
-
-/// Problem metadata and description.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Problem {
-    pub(crate) pid: String,
-    pub(crate) description: String,
-    pub(crate) input: String,
-    pub(crate) output: String,
-    pub(crate) example: Vec<Sample>,
-    pub(crate) info: ProblemInfo,
-}
-
-pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<Problem> {
-    let problem_info = ProblemInfo::from_pid(&pid).await?;
-    let mut example = vec![];
-    let mut sample_index = 1;
-    while let Ok(r#in) = read_file_by_id_name(&pid, &format!("example_{}.in", sample_index)).await {
-        let ans = read_file_by_id_name(&pid, &format!("example_{}.ans", sample_index))
-            .await
-            .unwrap_or_default();
-        let description = read_file_by_id_name(&pid, &format!("example_{}.md", sample_index))
-            .await
-            .unwrap_or_default();
-        example.push(Sample {
-            r#in,
-            ans,
-            description,
-        });
-        sample_index += 1;
-    }
-    Ok(Problem {
-        pid: pid.as_ref().to_string(),
-        description: read_file_by_id_name(&pid, "description.md").await?,
-        input: read_file_by_id_name(&pid, "input.md").await?,
-        output: read_file_by_id_name(&pid, "output.md")
-            .await
-            .unwrap_or_default(),
-        example,
-        info: problem_info,
-    })
+pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<ProblemMetadata> {
+    ProblemMetadata::from_pid(pid).await
 }
 
 pub(crate) async fn read_file_by_id_name(
@@ -442,15 +384,15 @@ pub(crate) async fn unzip_bytes_to_path(
         }
         Ok(())
     })
-    .await
-    .map_err(|e| {
-        warn!("Failed to join blocking task: {}", e);
-        AijError::FileSystem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "TASK_JOIN_FAILED".to_string(),
-            format!("Blocking task failed: {}", e),
-        )
-    })?
+        .await
+        .map_err(|e| {
+            warn!("Failed to join blocking task: {}", e);
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "TASK_JOIN_FAILED".to_string(),
+                format!("Blocking task failed: {}", e),
+            )
+        })?
 }
 
 pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> Result<()> {

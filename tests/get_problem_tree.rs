@@ -14,5 +14,5 @@ async fn test_get_problem_tree() {
     println!("Response JSON: {}", json);
     assert_eq!(json["code"], 0);
     assert_eq!(json["message"], "Success");
-    assert_eq!(json["data"]["tree"].as_array().unwrap().len(), 10);
+    assert_eq!(json["data"]["tree"].as_array().unwrap().len(), 3);
 }
