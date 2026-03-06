@@ -340,11 +340,6 @@ pub(crate) async fn unzip_bytes_to_path(
                 })?;
             } else {
                 if let Some(parent) = out_path.parent() {
-                    warn!(
-                        "Creating parent directory {} for file {}",
-                        parent.to_string_lossy(),
-                        out_path.to_string_lossy()
-                    );
                     std::fs::create_dir_all(parent).map_err(|e| {
                         AijError::FileSystem(
                             StatusCode::INTERNAL_SERVER_ERROR,
