@@ -2,26 +2,49 @@
 
 示例位于 [assets/problems/1](assets/problems/1) 目录下，包含以下文件：
 
-- `description.md`: 题目描述
-- `input.md`: 输入格式说明
-- `output.md`: 输出格式说明
-- `info.json`: 题目元信息
-    - `max_cpu_time_ms`: 最大CPU时间限制，单位毫秒(可选，默认1000, -1表示无穷)
-    - `max_real_time_ms`: 最大实际时间限制，单位毫秒(可选，默认2000, -1表示无穷)
-    - `max_memory_byte`: 最大内存限制，单位字节(可选，默认128MB, -1表示无穷)
-    - `max_stack_byte`: 最大栈内存限制，单位字节(可选，默认32MB)
-    - `max_process_number`: 最大进程数(可选，默认1, -1表示无穷)
-    - `max_output_size`: 最大输出大小(可选，默认1000000, -1表示无穷)
-    - `test_case_number`: 测试点数量
-    - `problem_type`: 题目类型，支持 "Standard"（标准题）和 "Interactive"（交互式题）
-    - `checker_type`: 检查器类型，支持 "Standard"（标准检查器）和 "Special"（特殊检查器）
-- `example_{num}.in`: 第num个示例输入文件
-- `example_{num}.ans`: 第num个示例答案文件
-- `example_{num}.md`: 第num个示例说明文件
-- `{num}.in`: 测试点num的输入文件
-- `{num}.ans`: 测试点num的答案文件
-- `interactor`: 交互器程序（可选，仅交互式题目需要，存储形式为二进制，用户上传形式为源代码/二进制）
-- `checker`: 检查器程序（可选，仅特殊检查器需要，存储形式为二进制，用户上传形式为源代码/二进制）
+- `problem.json`: 题目元数据信息
+
+```json
+{
+  "pid": "1",
+  "description": "两数之和",
+  "input": "一行两个正整数a, b($1 \\leq a, b \\leq 10^6$)。",
+  "output": "一行一个正整数 $a+b$。",
+  "hint": "这里是一些提示信息",
+  "example": [
+    {
+      "in": "1 2",
+      "ans": "3",
+      "description": ""
+    }
+  ]
+}
+```
+
+- `info.toml`: 题目测试数据的配置信息
+
+```toml
+[problem_info]
+problem_type = "Standard" #（Standard：标准题，Interactive：交互题，Special：特殊检查器题）
+checker_type = "Standard" # (Standard：默认检查器，Interactor：交互检查器 （仅交互题），Custom：自定义检查器（仅特殊检查器题）)
+time_limit_ms = 1000
+memory_limit_kb = 256000
+
+[testcases.1]
+in_path = "1.in" # 输入文件路径，相对于题目目录/data
+ans_path = "1.ans" # 答案文件路径，相对于题目目录/data，仅 checker_type != "Interactor" 时需要提供
+weight = 1.0
+
+[subtasks.1]
+cases = ["1"]
+pre_subtasks = []
+score = 100
+type = "min" # (min：子任务得分为包含的测试点中得分最低的那个，sum：子任务得分为包含的测试点得分之和)
+
+[custom_modules]
+checker_path = "checker.cpp" # 仅当 checker_type = "Custom" 时需要提供，路径相对于题目目录/data
+interactor_path = "interactor.cpp" # 仅当 checker_type = "Interactor" 时需要提供，路径相对于题目目录/data
+```
 
 ### 针对交互题的额外说明
 
@@ -49,8 +72,6 @@
 来使用该库。
 
 评测机使用的编译指令为 `g++ /path/to/source.cpp -o /path/to/output -O2 -static -std=c++23 -I/path/to/testlib`。
-
-### TODO
 
 ## 环境变量说明
 

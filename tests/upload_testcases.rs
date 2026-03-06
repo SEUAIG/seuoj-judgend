@@ -6,7 +6,8 @@ mod utils;
 #[tokio::test]
 async fn test_upload_problem_data() {
     let server = get_test_server().await;
-
+    std::fs::rename("./assets/problems/1/data", "./test_backup_data_dir")
+        .expect("Failed to copy test input file");
     std::fs::write("./1.in", b"1 2 3\n").expect("Failed to write test input file");
 
     std::process::Command::new("zip")
@@ -33,12 +34,8 @@ async fn test_upload_problem_data() {
 
     std::fs::remove_file("./1.in").expect("Failed to remove test input file");
     std::fs::remove_file("./data.zip").expect("Failed to remove zip file");
-    std::fs::write("./assets/problems/1/data/1.in", "1 2")
-        .expect("Failed to reset test input file");
-    std::fs::write("./assets/problems/1/data/1.ans", "3").expect("Failed to reset test input file");
-    std::fs::write(
-        "./assets/problems/1/data/case.toml",
-        "[[test_cases]]\nid = 1\nin_name = '1.in'\nans_name = '1.ans'\n",
-    )
-    .expect("Failed to reset test input file");
+    std::fs::remove_dir_all("./assets/problems/1/data")
+        .expect("Failed to remove test data directory");
+    std::fs::rename("./test_backup_data_dir", "./assets/problems/1/data")
+        .expect("Failed to restore test data directory");
 }

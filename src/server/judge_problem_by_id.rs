@@ -2,7 +2,8 @@ use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
 use crate::fs::delete_dir_by_submission_id;
-use crate::judger::{JudgeResult, ProblemCase, SupportedLanguages, judge};
+use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use crate::schema::ProblemConfig;
 use crate::server::{AppJson, get_judge_semaphore};
 use axum::Json;
 use axum::http::StatusCode;
@@ -31,8 +32,8 @@ pub(crate) async fn judge_problem_by_id(
         "Received judge request: submission_id={}, problem_id={}, language={:?}",
         &payload.submission_id, &payload.problem_id, &payload.language
     );
-    let case_info = ProblemCase::from_pid(&payload.problem_id).await?;
-    if case_info.is_empty() {
+    let problem_config = ProblemConfig::from_pid(&payload.problem_id).await?;
+    if problem_config.testcases.is_empty() {
         let message = format!("Problem {} has no test cases.", &payload.problem_id);
         error!("{}", message);
         return Err(AijError::Request(

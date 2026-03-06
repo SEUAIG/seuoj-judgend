@@ -1,3 +1,61 @@
+[problem_info]
 problem_type = "Standard"
 checker_type = "Standard"
-max_real_time_ms = 1000
+time_limit_ms = 1000
+memory_limit_kb = 256000
+
+[testcases."1"]
+in_path = "1.in"
+ans_path = "1.ans"
+weight = 1.0
+
+[testcases."2"]
+in_path = "2.in"
+ans_path = "2.ans"
+weight = 1.0
+
+[testcases."3"]
+in_path = "3.in"
+ans_path = "3.ans"
+weight = 1.0
+
+[testcases."4"]
+in_path = "4.in"
+ans_path = "4.ans"
+weight = 1.0
+
+[testcases."5"]
+in_path = "5.in"
+ans_path = "5.ans"
+weight = 1.0
+
+[testcases."6"]
+in_path = "6.in"
+ans_path = "6.ans"
+weight = 1.0
+
+[testcases."7"]
+in_path = "7.in"
+ans_path = "7.ans"
+weight = 1.0
+
+[testcases."8"]
+in_path = "8.in"
+ans_path = "8.ans"
+weight = 1.0
+
+[testcases."9"]
+in_path = "9.in"
+ans_path = "9.ans"
+weight = 1.0
+
+[testcases."10"]
+in_path = "10.in"
+ans_path = "10.ans"
+weight = 1.0
+
+[subtasks."1"]
+cases = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+pre_subtasks = []
+score = 100
+type = "min"
