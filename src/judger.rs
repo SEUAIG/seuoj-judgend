@@ -13,6 +13,8 @@ use utils::chmod_plus_x;
 mod checker;
 mod utils;
 
+pub(crate) use utils::compile;
+
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) enum SupportedLanguages {

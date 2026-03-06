@@ -45,6 +45,10 @@ pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> Result<()> {
 
 #[allow(dead_code)]
 pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
+    let path_without_ext = path.as_ref().with_extension("");
+    if path_without_ext.exists() {
+        return Ok(());
+    }
     let testlib_path = &AijConfig::get().testlib_dir;
     let output = tokio::process::Command::new("g++")
         .arg(path.as_ref())
