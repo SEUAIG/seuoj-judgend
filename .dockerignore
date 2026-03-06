@@ -12,6 +12,7 @@ Thumbs.db           # Windows 系统文件
 
 # --- 文档与临时文件 ---
 README.md
+CLAUDE.md
 docs/
 *.log
 tmp/
