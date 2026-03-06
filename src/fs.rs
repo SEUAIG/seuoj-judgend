@@ -46,7 +46,6 @@ impl FileSystem {
     }
 }
 
-
 pub(crate) async fn read_problem_by_id(pid: impl AsRef<str>) -> Result<ProblemMetadata> {
     ProblemMetadata::from_pid(pid).await
 }
@@ -384,15 +383,15 @@ pub(crate) async fn unzip_bytes_to_path(
         }
         Ok(())
     })
-        .await
-        .map_err(|e| {
-            warn!("Failed to join blocking task: {}", e);
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "TASK_JOIN_FAILED".to_string(),
-                format!("Blocking task failed: {}", e),
-            )
-        })?
+    .await
+    .map_err(|e| {
+        warn!("Failed to join blocking task: {}", e);
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "TASK_JOIN_FAILED".to_string(),
+            format!("Blocking task failed: {}", e),
+        )
+    })?
 }
 
 pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> Result<()> {

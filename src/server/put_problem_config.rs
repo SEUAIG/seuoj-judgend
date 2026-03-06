@@ -2,9 +2,9 @@ use crate::error::Result;
 use crate::fs;
 use crate::schema::{CheckerType, ProblemConfig, ProblemMetadata, ProblemType};
 use crate::server::get_config_source::ConfigQuery;
+use axum::Json;
 use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
-use axum::Json;
 use serde_json::json;
 use std::collections::HashSet;
 use tracing::info;
@@ -33,9 +33,15 @@ pub(crate) async fn put_problem_config(
                 ProblemType::Interactive => {
                     if problem_config.problem_info.checker_type == CheckerType::Interactor
                         && let Some(custom_modules) = &problem_config.custom_modules
-                        && let Some(interactor_path) = &custom_modules.interactor_path {
+                        && let Some(interactor_path) = &custom_modules.interactor_path
+                    {
                         fs::validate_filename(interactor_path)?;
-                        let interactor_full_path = fs::get_path_by_id_name(&pid, format!("data/{}", interactor_path), true).await?;
+                        let interactor_full_path = fs::get_path_by_id_name(
+                            &pid,
+                            format!("data/{}", interactor_path),
+                            true,
+                        )
+                        .await?;
                         if interactor_path.contains(".cpp") {
                             crate::judger::compile(interactor_full_path).await?;
                         }
@@ -43,16 +49,20 @@ pub(crate) async fn put_problem_config(
                         return Err(crate::error::AijError::Request(
                             axum::http::StatusCode::BAD_REQUEST,
                             "INVALID_CHECKER_TYPE".to_string(),
-                            "Checker type must be 'Interactor' for interactive problems".to_string(),
+                            "Checker type must be 'Interactor' for interactive problems"
+                                .to_string(),
                         ));
                     }
                 }
                 ProblemType::Special => {
                     if problem_config.problem_info.checker_type == CheckerType::Special
                         && let Some(custom_modules) = &problem_config.custom_modules
-                        && let Some(checker_path) = &custom_modules.checker_path {
+                        && let Some(checker_path) = &custom_modules.checker_path
+                    {
                         fs::validate_filename(checker_path)?;
-                        let checker_full_path = fs::get_path_by_id_name(&pid, format!("data/{}", checker_path), true).await?;
+                        let checker_full_path =
+                            fs::get_path_by_id_name(&pid, format!("data/{}", checker_path), true)
+                                .await?;
                         if checker_path.contains(".cpp") {
                             crate::judger::compile(checker_full_path).await?;
                         }
@@ -78,11 +88,11 @@ pub(crate) async fn put_problem_config(
                 }
                 let in_path = &config.in_path;
                 fs::validate_filename(in_path)?;
-                let _ = fs::get_path_by_id_name(&pid, in_path, true).await?;
+                let _ = fs::get_path_by_id_name(&pid, format!("data/{in_path}"), true).await?;
                 let ans_path = &config.ans_path;
                 if !ans_path.is_empty() {
                     fs::validate_filename(ans_path)?;
-                    let _ = fs::get_path_by_id_name(&pid, ans_path, true).await?;
+                    let _ = fs::get_path_by_id_name(&pid, format!("data/{ans_path}"), true).await?;
                 }
             }
             problem_config.save(&pid).await?;

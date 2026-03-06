@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::fs;
+use axum::Json;
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 use tracing::info;
@@ -43,7 +43,7 @@ pub(crate) async fn get_config_source(
         _ => Err(crate::error::AijError::Request(
             StatusCode::BAD_REQUEST,
             "INVALID_TYPE".to_string(),
-            format!("Invalid type: {}. Expected 'META' or 'CASE'", r#type),
+            format!("Invalid type: {}. Expected 'META' or 'INFO'", r#type),
         )),
     }
 }

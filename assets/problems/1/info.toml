@@ -1,15 +1,15 @@
 [problem_info]
-problem_type = "standard"
-checker_type = "standard"
+problem_type = "Standard"
+checker_type = "Standard"
 time_limit_ms = 1000
 memory_limit_kb = 256000
 
-[testcases."1"]
+[testcases.1]
 in_path = "1.in"
 ans_path = "1.ans"
 weight = 1.0
 
-[subtasks."1"]
+[subtasks.1]
 cases = ["1"]
 pre_subtasks = []
 score = 100

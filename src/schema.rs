@@ -36,11 +36,13 @@ impl ProblemMetadata {
     }
 
     pub(crate) fn from_json_str(toml_str: impl AsRef<str>) -> Result<Self> {
-        let metadata: Self = serde_json::from_str(toml_str.as_ref())
-            .map_err(|e| AijError::Request(
+        let metadata: Self = serde_json::from_str(toml_str.as_ref()).map_err(|e| {
+            AijError::Request(
                 StatusCode::BAD_REQUEST,
-                "Invalid TOML format".to_string(),
-                e.to_string()))?;
+                "INVALID_JSON".to_string(),
+                e.to_string(),
+            )
+        })?;
         Ok(metadata)
     }
 
@@ -95,13 +97,14 @@ impl ProblemConfig {
         Self::from_toml_str(config_toml)
     }
 
-
     pub(crate) fn from_toml_str(toml_str: impl AsRef<str>) -> Result<Self> {
-        let problem_config: Self = toml::from_str(toml_str.as_ref())
-            .map_err(|e| AijError::Request(
+        let problem_config: Self = toml::from_str(toml_str.as_ref()).map_err(|e| {
+            AijError::Request(
                 StatusCode::BAD_REQUEST,
-                "Invalid TOML format".to_string(),
-                e.to_string()))?;
+                "INVALID_TOML".to_string(),
+                e.to_string(),
+            )
+        })?;
         Ok(problem_config)
     }
 

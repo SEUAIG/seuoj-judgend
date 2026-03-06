@@ -3,13 +3,12 @@ use crate::fs;
 use crate::fs::check_problem_exists;
 use crate::schema::{ProblemExample, ProblemMetadata};
 use crate::server::AppJson;
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
-
 
 /// Option Problem metadata and description.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,7 +16,7 @@ pub(crate) struct OptionProblem {
     pid: String,
     description: Option<String>,
     input: Option<String>,
-    answer: Option<String>,
+    output: Option<String>,
     example: Option<Vec<OptionSample>>,
     hint: Option<String>,
 }
@@ -41,7 +40,7 @@ impl OptionProblem {
             warn!("Input is missing for problem id: {}", self.pid);
             return Err("Input is missing".to_string());
         }
-        if self.answer.is_none() {
+        if self.output.is_none() {
             warn!("Output is missing for problem id: {}", self.pid);
             return Err("Output is missing".to_string());
         }
@@ -86,10 +85,11 @@ pub(crate) async fn edit_problem_by_id(
         })?;
     }
 
-
     // Handle problem metadata (problem.json)
     // Read existing metadata if it exists
-    let mut metadata = if !is_new && let Ok(content) = fs::read_file_by_id_name(problem_id, "problem.json").await {
+    let mut metadata = if !is_new
+        && let Ok(content) = fs::read_file_by_id_name(problem_id, "problem.json").await
+    {
         // Try to read existing problem.json
         serde_json::from_str::<ProblemMetadata>(&content).map_err(|e| {
             error!("Failed to parse existing problem.json: {}", e);
@@ -111,20 +111,21 @@ pub(crate) async fn edit_problem_by_id(
     if let Some(input) = payload.input.take() {
         metadata.input = input;
     }
-    if let Some(output) = payload.answer.take() {
+    if let Some(output) = payload.output.take() {
         metadata.output = output;
     }
     if let Some(hint) = payload.hint.take() {
         metadata.hint = hint;
     }
     if let Some(example) = payload.example.take() {
-        metadata.example = example.into_iter().map(|sample| {
-            ProblemExample {
+        metadata.example = example
+            .into_iter()
+            .map(|sample| ProblemExample {
                 r#in: sample.r#in.unwrap_or_default(),
                 ans: sample.ans.unwrap_or_default(),
                 description: sample.description.unwrap_or_default(),
-            }
-        }).collect();
+            })
+            .collect();
     }
 
     let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|e| {

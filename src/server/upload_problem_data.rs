@@ -1,9 +1,9 @@
 use crate::error::{AijError, Result};
 use crate::fs;
+use axum::Json;
 use axum::extract::{Multipart, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde_json::json;
 use tracing::{error, info};
 
@@ -66,7 +66,8 @@ pub(crate) async fn upload_problem_data(
     {
         match format.as_str() {
             "zip" => {
-                let tmp_path = fs::get_path_by_id_name(&pid, "tmpdata/", false).await?;
+                let uuid = uuid::Uuid::new_v4().to_string();
+                let tmp_path = fs::get_path_by_id_name(&pid, format!("tmp_{uuid}/"), false).await?;
                 match fs::unzip_bytes_to_path(file, &tmp_path).await {
                     Ok(_) => {
                         let data_path = fs::get_path_by_id_name(&pid, "data/", false).await?;

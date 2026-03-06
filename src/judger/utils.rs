@@ -5,7 +5,6 @@ use reqwest::StatusCode;
 use std::path::Path;
 use tracing::error;
 
-
 /// Make the file at `path` executable by adding execute permissions for user, group, and others.
 pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> Result<()> {
     #[cfg(unix)]

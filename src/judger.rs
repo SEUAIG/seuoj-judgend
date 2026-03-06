@@ -88,13 +88,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -102,10 +102,11 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
         SupportedLanguages::Python3_12 => {
-            problem_config.problem_info.time_limit_ms = match problem_config.problem_info.time_limit_ms {
-                -1 => -1,
-                m => m * 2,
-            };
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             let python3 = AijConfig::get_binary_path("python3").await?;
             (
                 python3.to_string_lossy().to_string(),
@@ -151,10 +152,11 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
-            problem_config.problem_info.time_limit_ms = match problem_config.problem_info.time_limit_ms {
-                -1 => -1,
-                m => m * 2,
-            };
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             let javac = AijConfig::get_binary_path("javac").await?;
             let compile_output = tokio::process::Command::new(javac)
                 .arg(&source_file_path)
@@ -178,7 +180,10 @@ pub(crate) async fn judge(
                 "Main".to_string(),
             ];
             if problem_config.problem_info.memory_limit_kb != -1 {
-                args.insert(1, format!("-Xmx{}m", problem_config.problem_info.memory_limit_kb / 512));
+                args.insert(
+                    1,
+                    format!("-Xmx{}m", problem_config.problem_info.memory_limit_kb / 512),
+                );
             };
             let java = AijConfig::get_binary_path("java").await?;
             (
@@ -197,16 +202,11 @@ pub(crate) async fn judge(
     // todo! subtask judge
     // for now we just judge all test cases and return the result list
     for (id, case_config) in case_map {
-        let input_path = get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
+        let input_path =
+            get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
         let ans_path = match problem_type {
-            ProblemType::Standard | ProblemType::Special
-            => {
-                get_path_by_id_name(
-                    &pid,
-                    format!("data/{}", case_config.ans_path),
-                    true,
-                )
-                    .await?
+            ProblemType::Standard | ProblemType::Special => {
+                get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
             }
             ProblemType::Interactive => tmp_dir.join(format!("{}.ans", id)),
         };
@@ -261,7 +261,9 @@ pub(crate) async fn judge(
         let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
         let ans_content = match problem_type {
-            ProblemType::Standard | ProblemType::Special => get_text_by_path(&ans_path, Some(truncated_len)).await?,
+            ProblemType::Standard | ProblemType::Special => {
+                get_text_by_path(&ans_path, Some(truncated_len)).await?
+            }
             ProblemType::Interactive => Default::default(),
         };
         let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
@@ -276,7 +278,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                        .await?;
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
