@@ -68,7 +68,7 @@ pub(crate) async fn put_problem_config(
                 return Err(crate::error::AijError::Request(
                     axum::http::StatusCode::BAD_REQUEST,
                     "INVALID_CHECKER_TYPE".to_string(),
-                    "Checker type must be 'Custom' for special problems".to_string(),
+                    "Checker type must be 'Special' for special problems".to_string(),
                 ));
             }
         }
@@ -84,6 +84,16 @@ pub(crate) async fn put_problem_config(
                 format!("Duplicate test case ID: {}", case.id),
             ));
         }
+        if case.weight <= 0.0 {
+            return Err(crate::error::AijError::Request(
+                axum::http::StatusCode::BAD_REQUEST,
+                "INVALID_TEST_CASE_WEIGHT".to_string(),
+                format!(
+                    "Test case ID {} has non-positive weight: {}",
+                    case.id, case.weight
+                ),
+            ));
+        }
         let in_path = &case.in_path;
         fs::validate_filename(in_path)?;
         let _ = fs::get_path_by_id_name(&pid, format!("data/{in_path}"), true).await?;
@@ -93,8 +103,13 @@ pub(crate) async fn put_problem_config(
             let _ = fs::get_path_by_id_name(&pid, format!("data/{ans_path}"), true).await?;
         }
     }
-
+    let all_case_ids = existing_id;
     if !problem_config.subtasks.is_empty() {
+        let all_subtask_ids: HashSet<i32> = problem_config
+            .subtasks
+            .iter()
+            .map(|subtask| subtask.id)
+            .collect();
         let mut existing_subtask_id = HashSet::new();
         let mut sum_score = 0;
         let mut graph = HashMap::new();
@@ -108,7 +123,7 @@ pub(crate) async fn put_problem_config(
                 ));
             }
             for case_id in &subtask.cases {
-                if !existing_id.contains(case_id) {
+                if !all_case_ids.contains(case_id) {
                     return Err(crate::error::AijError::Request(
                         axum::http::StatusCode::BAD_REQUEST,
                         "SUBTASK_CASE_ID_NOT_FOUND".to_string(),
@@ -120,6 +135,16 @@ pub(crate) async fn put_problem_config(
                 }
             }
             for &pre_id in &subtask.pre_subtasks {
+                if !all_subtask_ids.contains(&pre_id) {
+                    return Err(crate::error::AijError::Request(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "SUBTASK_PRE_ID_NOT_FOUND".to_string(),
+                        format!(
+                            "Subtask {} references non-existent prerequisite subtask ID: {}",
+                            subtask.id, pre_id
+                        ),
+                    ));
+                }
                 graph
                     .entry(pre_id)
                     .or_insert_with(Vec::new)

@@ -30,13 +30,13 @@ checker_type = "Standard" # (Standard：默认检查器，Interactor：交互检
 time_limit_ms = 1000
 memory_limit_kb = 256000
 
-[testcases]
+[[testcases]]
 id = 1
 in_path = "1.in" # 输入文件路径，相对于题目目录/data
 ans_path = "1.ans" # 答案文件路径，相对于题目目录/data，仅 checker_type != "Interactor" 时需要提供
 weight = 1.0
 
-[subtasks]
+[[subtasks]]
 id = 1
 cases = [1]
 pre_subtasks = []

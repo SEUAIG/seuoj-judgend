@@ -7,6 +7,7 @@ use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path}
 use crate::schema::{CheckerType, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tracing::{info, warn};
 use utils::chmod_plus_x;
 
@@ -217,27 +218,26 @@ pub(crate) async fn judge(
     );
     let mut subtasks = problem_config.subtasks;
     if !topo_order.is_empty() {
-        let mut have_error = false;
+        let mut error_map = HashMap::new();
         for sub_id in topo_order {
             info!("Judging subtask {} of submission {}", sub_id, submission_id);
-            let case_ids: Vec<i32> = subtasks
+            let subtask_config = subtasks.iter().find(|s| s.id == sub_id).ok_or_else(|| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "SUBTASK_NOT_FOUND".to_string(),
+                    format!("Subtask with id {} not found in problem config", sub_id),
+                )
+            })?;
+            let have_error = subtask_config
+                .pre_subtasks
                 .iter()
-                .find(|s| s.id == sub_id)
-                .ok_or_else(|| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "SUBTASK_NOT_FOUND".to_string(),
-                        format!("Subtask with id {} not found in problem config", sub_id),
-                    )
-                })?
-                .cases
-                .clone();
+                .any(|pre_id| error_map.get(pre_id).copied().unwrap_or(false));
             let mut scores = Vec::new();
-            for case_id in case_ids {
+            for case_id in &subtask_config.cases {
                 let case_config = problem_config
                     .testcases
                     .iter()
-                    .find(|c| c.id == case_id)
+                    .find(|c| c.id == *case_id)
                     .ok_or_else(|| {
                         AijError::Judge(
                             StatusCode::INTERNAL_SERVER_ERROR,
@@ -266,7 +266,9 @@ pub(crate) async fn judge(
                 .await?;
                 scores.push(res.score);
                 out_vec.push(res.clone());
-                have_error = res.r#type != "Accepted";
+                if res.r#type != "Accepted" {
+                    error_map.insert(sub_id, true);
+                }
             }
             let subtask_type = subtasks
                 .iter()
@@ -289,7 +291,11 @@ pub(crate) async fn judge(
                 }
                 "sum" => {
                     let len = scores.len();
-                    let avg_score: f64 = scores.into_iter().sum::<i32>() as f64 / len as f64;
+                    let avg_score: f64 = if len > 0 {
+                        scores.into_iter().sum::<i32>() as f64 / len as f64
+                    } else {
+                        0.0
+                    };
                     if let Some(subtask_config) = subtasks.iter_mut().find(|s| s.id == sub_id) {
                         subtask_config.score =
                             ((avg_score * subtask_config.score as f64) / 100.0) as i32;
@@ -306,6 +312,13 @@ pub(crate) async fn judge(
         }
     } else {
         let sum_weight: f64 = problem_config.testcases.iter().map(|s| s.weight).sum();
+        if sum_weight == 0.0 {
+            return Err(AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INVALID_TESTCASE_WEIGHT".to_string(),
+                "Sum of test case weights cannot be zero".to_string(),
+            ));
+        }
         for case_config in &problem_config.testcases {
             let mut res = judge_single_case(
                 case_config,
