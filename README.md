@@ -1,6 +1,6 @@
 ## 题目文件构成
 
-示例位于 [assets/problems/1](assets/problems/1) 目录下，包含以下文件：
+示例位于 [assets/problems/p01](assets/problems/p01) 目录下，包含以下文件：
 
 - `problem.json`: 题目元数据信息
 
