@@ -88,13 +88,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -277,7 +277,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                        .await?;
+                    .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }

@@ -5,10 +5,13 @@
 //! SEU AIJ Judge-Endpoint
 
 use crate::config::AijConfig;
-use crate::server::{edit_problem_by_id, get_problem_by_id, get_problem_config, get_problem_tree, judge_problem_by_id, put_problem_config, serve_problem_file, upload_problem_data};
+use crate::server::{
+    edit_problem_by_id, get_problem_by_id, get_problem_config, get_problem_tree,
+    judge_problem_by_id, put_problem_config, serve_problem_file, upload_problem_data,
+};
+use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, patch, post, put};
-use axum::Router;
 use tokio::sync::OnceCell;
 
 pub mod config;

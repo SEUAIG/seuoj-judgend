@@ -64,12 +64,13 @@ in_path = "10.in"
 ans_path = "10.ans"
 weight = 1.0
 
-# 这是一个具有复杂 DAG 结构的测试配置
-# 拓扑顺序示例：[1, 2, 3, 6, 7] -> [4, 5] -> [8] -> [9] -> [10]
-
 [[subtasks]]
 id = 1
-cases = [1, 2, 3]
+cases = [
+    1,
+    2,
+    3,
+]
 pre_subtasks = []
 score = 20
 type = "min"
@@ -77,41 +78,48 @@ type = "min"
 [[subtasks]]
 id = 2
 cases = [4]
-pre_subtasks = [1] # 依赖基础任务
+pre_subtasks = [1]
 score = 10
 type = "min"
 
 [[subtasks]]
 id = 3
 cases = [5]
-pre_subtasks = [1] # 同样依赖基础任务，形成分叉
+pre_subtasks = [1]
 score = 10
 type = "min"
 
 [[subtasks]]
 id = 4
-cases = [6, 7]
-pre_subtasks = [] # 独立的并行分支
+cases = [
+    6,
+    7,
+]
+pre_subtasks = []
 score = 20
 type = "min"
 
 [[subtasks]]
 id = 5
 cases = [8]
-pre_subtasks = [2, 3, 4] # 关键汇聚点：依赖多个子任务的完成
+pre_subtasks = [
+    2,
+    3,
+    4,
+]
 score = 20
 type = "min"
 
 [[subtasks]]
 id = 6
 cases = [9]
-pre_subtasks = [5] # 深层依赖长链开始
+pre_subtasks = [5]
 score = 10
 type = "min"
 
 [[subtasks]]
 id = 7
 cases = [10]
-pre_subtasks = [6] # 最终叶子节点
+pre_subtasks = [6]
 score = 10
 type = "min"

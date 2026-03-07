@@ -1,15 +1,13 @@
 use crate::error::Result;
 use crate::fs;
-use crate::schema::{
-    CheckerType, ProblemConfig, ProblemType,
-};
+use crate::schema::{CheckerType, ProblemConfig, ProblemType};
 use crate::server::AppJson;
+use axum::Json;
 use axum::extract::Path;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde_json::json;
-use std::collections::HashSet;
-use tracing::info;
+use std::collections::{HashMap, HashSet};
+use tracing::{error, info};
 
 pub(crate) async fn put_problem_config(
     Path(pid): Path<String>,
@@ -21,16 +19,23 @@ pub(crate) async fn put_problem_config(
 
     match problem_config.problem_info.problem_type {
         ProblemType::Interactive => {
-            if problem_config.problem_info.checker_type == CheckerType::Interactor
-                && let Some(custom_modules) = &problem_config.custom_modules
-                && let Some(interactor_path) = &custom_modules.interactor_path
-            {
-                fs::validate_filename(interactor_path)?;
-                let interactor_full_path =
-                    fs::get_path_by_id_name(&pid, format!("data/{}", interactor_path), true)
-                        .await?;
-                if interactor_path.contains(".cpp") {
-                    crate::judger::compile(interactor_full_path).await?;
+            if problem_config.problem_info.checker_type == CheckerType::Interactor {
+                if let Some(custom_modules) = &problem_config.custom_modules
+                    && let Some(interactor_path) = &custom_modules.interactor_path
+                {
+                    fs::validate_filename(interactor_path)?;
+                    let interactor_full_path =
+                        fs::get_path_by_id_name(&pid, format!("data/{}", interactor_path), true)
+                            .await?;
+                    if interactor_path.contains(".cpp") {
+                        crate::judger::compile(interactor_full_path).await?;
+                    }
+                } else {
+                    return Err(crate::error::AijError::Request(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "INTERACTOR_WITHOUT_PATH".to_string(),
+                        "Checker type is 'Interactor' but no interactor path provided".to_string(),
+                    ));
                 }
             } else {
                 return Err(crate::error::AijError::Request(
@@ -41,15 +46,23 @@ pub(crate) async fn put_problem_config(
             }
         }
         ProblemType::Special => {
-            if problem_config.problem_info.checker_type == CheckerType::Special
-                && let Some(custom_modules) = &problem_config.custom_modules
-                && let Some(checker_path) = &custom_modules.checker_path
-            {
-                fs::validate_filename(checker_path)?;
-                let checker_full_path =
-                    fs::get_path_by_id_name(&pid, format!("data/{}", checker_path), true).await?;
-                if checker_path.contains(".cpp") {
-                    crate::judger::compile(checker_full_path).await?;
+            if problem_config.problem_info.checker_type == CheckerType::Special {
+                if let Some(custom_modules) = &problem_config.custom_modules
+                    && let Some(checker_path) = &custom_modules.checker_path
+                {
+                    fs::validate_filename(checker_path)?;
+                    let checker_full_path =
+                        fs::get_path_by_id_name(&pid, format!("data/{}", checker_path), true)
+                            .await?;
+                    if checker_path.contains(".cpp") {
+                        crate::judger::compile(checker_full_path).await?;
+                    }
+                } else {
+                    return Err(crate::error::AijError::Request(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "CHECKER_WITHOUT_PATH".to_string(),
+                        "Checker type is 'Special' but no checker path provided".to_string(),
+                    ));
                 }
             } else {
                 return Err(crate::error::AijError::Request(
@@ -80,6 +93,66 @@ pub(crate) async fn put_problem_config(
             let _ = fs::get_path_by_id_name(&pid, format!("data/{ans_path}"), true).await?;
         }
     }
+
+    if !problem_config.subtasks.is_empty() {
+        let mut existing_subtask_id = HashSet::new();
+        let mut sum_score = 0;
+        let mut graph = HashMap::new();
+        for subtask in &problem_config.subtasks {
+            sum_score += subtask.score;
+            if !existing_subtask_id.insert(subtask.id) {
+                return Err(crate::error::AijError::Request(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "DUPLICATE_SUBTASK_ID".to_string(),
+                    format!("Duplicate subtask ID: {}", subtask.id),
+                ));
+            }
+            for case_id in &subtask.cases {
+                if !existing_id.contains(case_id) {
+                    return Err(crate::error::AijError::Request(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        "SUBTASK_CASE_ID_NOT_FOUND".to_string(),
+                        format!(
+                            "Subtask {} references non-existent test case ID: {}",
+                            subtask.id, case_id
+                        ),
+                    ));
+                }
+            }
+            for &pre_id in &subtask.pre_subtasks {
+                graph
+                    .entry(pre_id)
+                    .or_insert_with(Vec::new)
+                    .push(subtask.id);
+            }
+        }
+        if sum_score != 100 {
+            return Err(crate::error::AijError::Request(
+                axum::http::StatusCode::BAD_REQUEST,
+                "INVALID_SUBTASK_SCORE".to_string(),
+                format!("Sum of subtask scores must be 100, but got {}", sum_score),
+            ));
+        }
+        // Check for cycles using DFS
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        for &subtask_id in existing_subtask_id.iter() {
+            if !visited.contains(&subtask_id)
+                && has_cycle(subtask_id, &graph, &mut visited, &mut rec_stack)
+            {
+                error!(
+                    "Cycle detected in subtask dependencies for problem ID '{}'",
+                    pid
+                );
+                return Err(crate::error::AijError::Request(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "CYCLE_IN_SUBTASK_DEPENDENCY".to_string(),
+                    "Cycle detected in subtask dependencies".to_string(),
+                ));
+            }
+        }
+    }
+
     problem_config.save(&pid).await?;
 
     info!("Successfully updated config for problem ID '{}'", pid);
@@ -87,4 +160,28 @@ pub(crate) async fn put_problem_config(
         "code": 0,
         "message": "Success",
     })))
+}
+
+fn has_cycle(
+    u: i32,
+    adj: &HashMap<i32, Vec<i32>>,
+    visited: &mut HashSet<i32>,
+    rec_stack: &mut HashSet<i32>,
+) -> bool {
+    visited.insert(u);
+    rec_stack.insert(u);
+
+    if let Some(neighbors) = adj.get(&u) {
+        for &v in neighbors {
+            if rec_stack.contains(&v) {
+                return true;
+            }
+            if !visited.contains(&v) && has_cycle(v, adj, visited, rec_stack) {
+                return true;
+            }
+        }
+    }
+
+    rec_stack.remove(&u);
+    false
 }
