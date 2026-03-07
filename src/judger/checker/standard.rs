@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::fs::get_text_by_path;
+use crate::judger::checker::CheckerResult;
 use std::path::Path;
 use tracing::info;
 
@@ -7,7 +8,7 @@ pub(crate) async fn standard_checker(
     problem_id: impl AsRef<str>,
     output_path: impl AsRef<Path>,
     ans_path: impl AsRef<Path>,
-) -> Result<(bool, String)> {
+) -> Result<CheckerResult> {
     {
         info!("Using standard checker for problem {}", problem_id.as_ref());
         let out = get_text_by_path(output_path, None).await?;
@@ -16,7 +17,7 @@ pub(crate) async fn standard_checker(
     }
 }
 
-pub(crate) async fn standard_checker_str(output: &str, answer: &str) -> (bool, String) {
+pub(crate) async fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
     let normalize = |mut text: &str| {
         while text.ends_with('\n') || text.ends_with('\r') {
             text = &text[..text.len() - 1];
@@ -32,7 +33,7 @@ pub(crate) async fn standard_checker_str(output: &str, answer: &str) -> (bool, S
     let answer_lines: Vec<&str> = answer_normalized.lines().collect();
 
     if output_lines == answer_lines {
-        return (true, String::new());
+        return CheckerResult::Accepted;
     }
 
     // Find the first line that differs
@@ -41,26 +42,20 @@ pub(crate) async fn standard_checker_str(output: &str, answer: &str) -> (bool, S
         let out_line = output_lines.get(i).unwrap_or(&"");
         let ans_line = answer_lines.get(i).unwrap_or(&"");
         if out_line != ans_line {
-            return (
-                false,
-                format!(
-                    "In line {}:\nExpected: '{}'\nFound:    '{}'",
-                    i + 1,
-                    ans_line,
-                    out_line
-                ),
-            );
+            return CheckerResult::WrongAnswer(format!(
+                "In line {}:\nExpected: '{}'\nFound:    '{}'",
+                i + 1,
+                ans_line,
+                out_line
+            ));
         }
     }
 
-    (
-        false,
-        format!(
-            "Line number mismatch: Expected {} row, actual {} row",
-            answer_lines.len(),
-            output_lines.len()
-        ),
-    )
+    CheckerResult::WrongAnswer(format!(
+        "Line number mismatch: Expected {} row, actual {} row",
+        answer_lines.len(),
+        output_lines.len()
+    ))
 }
 
 #[cfg(test)]
@@ -71,10 +66,16 @@ mod tests {
     async fn test_standard_checker_str() {
         let output = "Hello, World!  \nThis is a test.\n\n";
         let answer = "Hello, World!\nThis is a test.";
-        assert!(standard_checker_str(output, answer).await.0);
+        assert!(matches!(
+            standard_checker_str(output, answer).await,
+            CheckerResult::Accepted
+        ));
 
         let output = "Hello, World!\nThis is a test.\nExtra line.";
         let answer = "Hello, World!\nThis is a test.";
-        assert!(!standard_checker_str(output, answer).await.0);
+        assert!(matches!(
+            standard_checker_str(output, answer).await,
+            CheckerResult::WrongAnswer(_)
+        ));
     }
 }

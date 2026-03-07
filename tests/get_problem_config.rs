@@ -3,10 +3,10 @@ use crate::utils::get_test_server;
 mod utils;
 
 #[tokio::test]
-async fn test_get_config_source() {
+async fn test_get_problem_config() {
     let server = get_test_server().await;
 
-    let response = server.get("/judge/problem/config/1?type=META").await;
+    let response = server.get("/judge/problem/config/1").await;
 
     response.assert_status_ok();
     let body = response.text();
@@ -14,10 +14,5 @@ async fn test_get_config_source() {
     println!("Response JSON: {}", json);
     assert_eq!(json["code"], 0);
     assert_eq!(json["message"], "Success");
-    let case_config_content = std::fs::read_to_string("./assets/problems/1/problem.json")
-        .expect("Failed to read problem.json");
-    assert_eq!(
-        json["data"]["config"].as_str().unwrap(),
-        case_config_content
-    );
+    assert_eq!(json["data"]["problem_info"]["checker_type"], "Special");
 }

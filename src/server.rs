@@ -1,8 +1,8 @@
 //! Server-related functionalities for the AI Judge system.
 
 mod edit_problem_by_id;
-mod get_config_source;
 mod get_problem_by_id;
+mod get_problem_config;
 mod get_problem_tree;
 mod judge_problem_by_id;
 mod put_problem_config;
@@ -20,8 +20,8 @@ use tokio::sync::Semaphore;
 use tracing::error;
 
 pub(crate) use edit_problem_by_id::edit_problem_by_id;
-pub(crate) use get_config_source::get_config_source;
 pub(crate) use get_problem_by_id::get_problem_by_id;
+pub(crate) use get_problem_config::get_problem_config;
 pub(crate) use get_problem_tree::get_problem_tree;
 pub(crate) use judge_problem_by_id::judge_problem_by_id;
 pub(crate) use put_problem_config::put_problem_config;

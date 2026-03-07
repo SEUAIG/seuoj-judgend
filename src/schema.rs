@@ -9,24 +9,23 @@ use crate::fs;
 use axum::http::StatusCode;
 use judger::Config;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tracing::error;
 
 /// Problem metadata and description stored as JSON.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ProblemMetadata {
+pub(crate) struct ProblemMetadata {
     /// Problem ID
-    pub pid: String,
+    pub(crate) pid: String,
     /// Problem description (Markdown format)
-    pub description: String,
+    pub(crate) description: String,
     /// Input format description (Markdown format)
-    pub input: String,
+    pub(crate) input: String,
     /// Output format description (Markdown format)
-    pub output: String,
+    pub(crate) output: String,
     /// Problem hints (Markdown format)
-    pub hint: String,
+    pub(crate) hint: String,
     /// Examples
-    pub example: Vec<ProblemExample>,
+    pub(crate) example: Vec<ProblemExample>,
 }
 
 impl ProblemMetadata {
@@ -66,7 +65,7 @@ impl ProblemMetadata {
 
 /// Problem example (input/output pair)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemExample {
+pub(crate) struct ProblemExample {
     /// Example input
     pub(crate) r#in: String,
     /// Example answer/output
@@ -78,14 +77,14 @@ pub struct ProblemExample {
 /// Problem configuration stored as TOML.
 /// This corresponds to the "配置数据 Schema".
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ProblemConfig {
+pub(crate) struct ProblemConfig {
     /// Problem Info
     pub(crate) problem_info: ProblemInfo,
     /// Test cases
-    pub(crate) testcases: HashMap<String, TestCaseConfig>,
+    pub(crate) testcases: Vec<TestCaseConfig>,
     /// Subtasks (optional)
     #[serde(default)]
-    pub(crate) subtasks: HashMap<String, SubtaskConfig>,
+    pub(crate) subtasks: Vec<SubtaskConfig>,
     /// Custom modules (checker/interactor)
     #[serde(default)]
     pub(crate) custom_modules: Option<CustomModules>,
@@ -134,9 +133,19 @@ pub(crate) struct ProblemInfo {
     /// type of the checker
     pub(crate) checker_type: CheckerType,
     /// Maximum CPU time in milliseconds (-1 for unlimited).
+    #[serde(default = "default_time_limit")]
     pub(crate) time_limit_ms: i32,
     /// Maximum memory in kilobytes (-1 for unlimited).
+    #[serde(default = "default_memory_limit")]
     pub(crate) memory_limit_kb: i64,
+}
+
+fn default_time_limit() -> i32 {
+    1000
+}
+
+fn default_memory_limit() -> i64 {
+    256 * 1024
 }
 
 impl ProblemInfo {
@@ -155,20 +164,22 @@ impl ProblemInfo {
 
 /// Test case configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TestCaseConfig {
+pub(crate) struct TestCaseConfig {
+    /// Unique identifier for the test case
+    pub(crate) id: i32,
     /// Path to input file (relative to problem directory)
-    pub in_path: String,
+    pub(crate) in_path: String,
     /// Path to output/answer file (relative to problem directory)
-    pub ans_path: String,
+    pub(crate) ans_path: String,
     /// Weight for scoring (default: 1.0)
     #[serde(default = "default_weight")]
-    pub weight: f64,
+    pub(crate) weight: f64,
     /// Override time limit (milliseconds), null to use global
     #[serde(default)]
-    pub time_limit_ms: Option<i32>,
+    pub(crate) time_limit_ms: Option<i32>,
     /// Override memory limit (kilobytes), null to use global
     #[serde(default)]
-    pub memory_limit_kb: Option<i64>,
+    pub(crate) memory_limit_kb: Option<i64>,
 }
 
 fn default_weight() -> f64 {
@@ -177,17 +188,19 @@ fn default_weight() -> f64 {
 
 /// Subtask configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubtaskConfig {
+pub(crate) struct SubtaskConfig {
+    /// Unique identifier for the subtask
+    pub(crate) id: i32,
     /// List of test case IDs belonging to this subtask
-    pub cases: Vec<String>,
+    pub(crate) cases: Vec<i32>,
     /// List of subtask IDs that must be passed before evaluating this one
     #[serde(default)]
-    pub pre_subtasks: Vec<String>,
+    pub(crate) pre_subtasks: Vec<i32>,
     /// Total score awarded if this subtask is passed completely
-    pub score: i32,
+    pub(crate) score: i32,
     /// Scoring type: "min", "sum", etc.
     #[serde(default = "default_subtask_type")]
-    pub r#type: String,
+    pub(crate) r#type: String,
 }
 
 fn default_subtask_type() -> String {
@@ -196,13 +209,13 @@ fn default_subtask_type() -> String {
 
 /// Custom modules (checker/interactor)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CustomModules {
+pub(crate) struct CustomModules {
     /// Path to the SPJ source/binary (relative to problem directory)
     #[serde(default)]
-    pub checker_path: Option<String>,
+    pub(crate) checker_path: Option<String>,
     /// Path to the Interactor source/binary (relative to problem directory)
     #[serde(default)]
-    pub interactor_path: Option<String>,
+    pub(crate) interactor_path: Option<String>,
 }
 
 /// Type of the problem
@@ -216,7 +229,7 @@ pub(crate) enum ProblemType {
     #[serde(alias = "interactive", alias = "INTERACTIVE")]
     Interactive,
     /// SPJ problem
-    #[serde(alias = "spj", alias = "SPJ")]
+    #[serde(alias = "special", alias = "SPECIAL")]
     Special,
 }
 

@@ -4,15 +4,17 @@ use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-use crate::schema::{ProblemConfig, ProblemType};
+use crate::schema::{CheckerType, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tracing::{info, warn};
 use utils::chmod_plus_x;
 
 mod checker;
 mod utils;
 
+use crate::judger::checker::CheckerResult;
 pub(crate) use utils::compile;
 
 /// Supported programming languages for the judger system.
@@ -119,6 +121,11 @@ pub(crate) async fn judge(
         }
         SupportedLanguages::Nodejs22 => {
             let nodejs = AijConfig::get_binary_path("node").await?;
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             (
                 nodejs.to_string_lossy().to_string(),
                 vec![
@@ -149,6 +156,11 @@ pub(crate) async fn judge(
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
             }
+            problem_config.problem_info.memory_limit_kb =
+                match problem_config.problem_info.memory_limit_kb {
+                    -1 => -1,
+                    m => m * 2,
+                };
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
@@ -196,141 +208,279 @@ pub(crate) async fn judge(
     let mut judge_config = problem_config.problem_info.to_judger_config();
     judge_config.seccomp_rule_name = Some(seccomp_rule);
     let mut out_vec = vec![];
-    let case_map = problem_config.testcases;
     let problem_type = problem_config.problem_info.problem_type;
     let checker_type = problem_config.problem_info.checker_type;
-    // todo! subtask judge
-    // for now we just judge all test cases and return the result list
-    for (id, case_config) in case_map {
-        let input_path =
-            get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
-        let ans_path = match problem_type {
-            ProblemType::Standard | ProblemType::Special => {
-                get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
+
+    let topo_order = utils::get_topo_order(&problem_config.subtasks)?;
+    info!(
+        "Topological order of subtasks for problem {}: {:?}",
+        pid, topo_order
+    );
+    let mut subtasks = problem_config.subtasks;
+    if !topo_order.is_empty() {
+        let mut error_map = HashMap::new();
+        for sub_id in topo_order {
+            info!("Judging subtask {} of submission {}", sub_id, submission_id);
+            let subtask_config = subtasks.iter().find(|s| s.id == sub_id).ok_or_else(|| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "SUBTASK_NOT_FOUND".to_string(),
+                    format!("Subtask with id {} not found in problem config", sub_id),
+                )
+            })?;
+            let have_error = subtask_config
+                .pre_subtasks
+                .iter()
+                .any(|pre_id| error_map.get(pre_id).copied().unwrap_or(false));
+            let mut scores = Vec::new();
+            for case_id in &subtask_config.cases {
+                let case_config = problem_config
+                    .testcases
+                    .iter()
+                    .find(|c| c.id == *case_id)
+                    .ok_or_else(|| {
+                        AijError::Judge(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "TESTCASE_NOT_FOUND".to_string(),
+                            format!("Test case with id {} not found in problem config", case_id),
+                        )
+                    })?;
+                if have_error {
+                    out_vec.push(JudgeResultItem {
+                        id: case_config.id,
+                        sys: "Skipped due to previous error in subtask".to_string(),
+                        r#type: "Skipped".to_string(),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+                let res = judge_single_case(
+                    case_config,
+                    (&pid, &submission_id),
+                    (problem_type, checker_type),
+                    &judge_config,
+                    exec_path.clone(),
+                    args.clone(),
+                    &tmp_dir,
+                )
+                .await?;
+                scores.push(res.score);
+                out_vec.push(res.clone());
+                if res.r#type != "Accepted" {
+                    error_map.insert(sub_id, true);
+                }
             }
-            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", id)),
-        };
-        let mut config = judge_config.clone();
-        if let Some(time_limit) = case_config.time_limit_ms {
-            config.max_cpu_time = time_limit;
-            config.max_real_time = time_limit * 2;
-        }
-        if let Some(memory_limit) = case_config.memory_limit_kb {
-            config.max_memory = memory_limit * 1024;
-            config.max_stack = memory_limit * 1024;
-            config.max_output_size = memory_limit * 1024;
-        }
-        config.exe_path = exec_path.clone();
-        config.args = args.clone();
-        config.input_path = input_path.to_string_lossy().to_string();
-        config.output_path = tmp_dir
-            .join(format!("{}.out", id))
-            .to_string_lossy()
-            .to_string();
-        config.error_path = tmp_dir
-            .join(format!("{}.err", id))
-            .to_string_lossy()
-            .to_string();
-        config.log_path = tmp_dir
-            .join(format!("{}.log", id))
-            .to_string_lossy()
-            .to_string();
-        let interactor = match problem_type {
-            ProblemType::Standard | ProblemType::Special => None,
-            ProblemType::Interactive => Some({
-                let path = get_path_by_id_name(&pid, "data/interactor", true).await?;
-                chmod_plus_x(&path).await?;
-                path
-            }),
-        };
-        info!(
-            "Judging submission {} on test case {} with interactor: {:?} AND config: {:?}",
-            submission_id, id, interactor, config
-        );
-        let res = judger::run(&config, interactor).map_err(|e| {
-            AijError::Judge(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "JUDGER_RUN_FAILED".to_string(),
-                format!("Judger run failed: {}", e),
-            )
-        })?;
-        info!(
-            "Judger result for test case {} of submission {}: {:?}",
-            id, submission_id, res
-        );
-        let truncated_len = AijConfig::get().output_truncate_length;
-        let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
-        let ans_content = match problem_type {
-            ProblemType::Standard | ProblemType::Special => {
-                get_text_by_path(&ans_path, Some(truncated_len)).await?
-            }
-            ProblemType::Interactive => Default::default(),
-        };
-        let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
-        let (sys, r#type) = match res.result {
-            judger::ErrorCode::Success => {
-                let mut result = ("Accepted".to_string(), "Accepted");
-                if problem_type != ProblemType::Interactive {
-                    let (res, detail) = checker::check(
-                        &pid,
-                        &config.input_path,
-                        &config.output_path,
-                        &ans_path,
-                        checker_type,
-                    )
-                    .await?;
-                    if !res {
-                        result = (detail, "WrongAnswer")
+            let subtask_type = subtasks
+                .iter()
+                .find(|s| s.id == sub_id)
+                .map(|s| s.r#type.as_str())
+                .unwrap_or("min");
+            match subtask_type {
+                "min" => {
+                    let min_score = scores.into_iter().min().unwrap_or(0);
+                    if let Some(subtask_config) = subtasks.iter_mut().find(|s| s.id == sub_id) {
+                        subtask_config.score =
+                            ((min_score * subtask_config.score) as f64 / 100.0) as i32;
+                    } else {
+                        return Err(AijError::Judge(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "SUBTASK_NOT_FOUND".to_string(),
+                            format!("Subtask with id {} not found in problem config", sub_id),
+                        ));
                     }
                 }
-                result
+                "sum" => {
+                    let len = scores.len();
+                    let avg_score: f64 = if len > 0 {
+                        scores.into_iter().sum::<i32>() as f64 / len as f64
+                    } else {
+                        0.0
+                    };
+                    if let Some(subtask_config) = subtasks.iter_mut().find(|s| s.id == sub_id) {
+                        subtask_config.score =
+                            ((avg_score * subtask_config.score as f64) / 100.0) as i32;
+                    }
+                }
+                _ => {
+                    return Err(AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "INVALID_SUBTASK_TYPE".to_string(),
+                        format!("Invalid subtask type: {}", subtask_type),
+                    ));
+                }
             }
-            judger::ErrorCode::WrongAnswer(s) => (s, "WrongAnswer"),
-            judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
-                ("Time Limit Exceeded".to_string(), "TimeLimitExceeded")
-            }
-            judger::ErrorCode::MemoryLimitExceeded => {
-                ("Memory Limit Exceeded".to_string(), "MemoryLimitExceeded")
-            }
-            judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), "RuntimeError"),
-            judger::ErrorCode::SystemError => {
-                let err_info = format!(
-                    "Judger System Error on submission {} test case {}: {:?}",
-                    submission_id, id, res
-                );
-                warn!("{err_info}");
-                (err_info, "SystemError")
-            }
-            _ => {
-                return Err(AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "UNEXPECTED_JUDGER_RESULT".to_string(),
-                    format!(
-                        "Unexpected judger result: {:?} for submission {} on test case {}",
-                        res, submission_id, id
-                    ),
-                ));
-            }
-        };
-        out_vec.push(JudgeResultItem {
-            cnt: id.parse::<usize>().unwrap_or(0),
-            time: res.cpu_time,
-            mem: res.memory,
-            sys,
-            r#in: in_content,
-            ans: ans_content,
-            out: out_content,
-            r#type: r#type.to_string(),
-        });
+        }
+    } else {
+        let sum_weight: f64 = problem_config.testcases.iter().map(|s| s.weight).sum();
+        if sum_weight == 0.0 {
+            return Err(AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INVALID_TESTCASE_WEIGHT".to_string(),
+                "Sum of test case weights cannot be zero".to_string(),
+            ));
+        }
+        for case_config in &problem_config.testcases {
+            let mut res = judge_single_case(
+                case_config,
+                (&pid, &submission_id),
+                (problem_type, checker_type),
+                &judge_config,
+                exec_path.clone(),
+                args.clone(),
+                &tmp_dir,
+            )
+            .await?;
+            res.score = (res.score as f64 * case_config.weight / sum_weight) as i32;
+            out_vec.push(res);
+        }
     }
-    Ok(JudgeResult::MaybeError(out_vec))
+    Ok(JudgeResult::MaybeError(out_vec, subtasks))
+}
+
+async fn judge_single_case(
+    case_config: &TestCaseConfig,
+    (pid, submission_id): (&str, &str),
+    (problem_type, checker_type): (ProblemType, CheckerType),
+    judge_config: &judger::Config,
+    exec_path: String,
+    args: Vec<String>,
+    tmp_dir: &std::path::Path,
+) -> Result<JudgeResultItem> {
+    let input_path =
+        get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
+    let ans_path = match problem_type {
+        ProblemType::Standard | ProblemType::Special => {
+            get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
+        }
+        ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case_config.id)),
+    };
+    let mut config = judge_config.clone();
+    if let Some(time_limit) = case_config.time_limit_ms {
+        config.max_cpu_time = time_limit;
+        config.max_real_time = time_limit * 2;
+    }
+    if let Some(memory_limit) = case_config.memory_limit_kb {
+        config.max_memory = memory_limit * 1024;
+        config.max_stack = memory_limit * 1024;
+        config.max_output_size = memory_limit * 1024;
+    }
+    config.exe_path = exec_path.clone();
+    config.args = args.clone();
+    config.input_path = input_path.to_string_lossy().to_string();
+    config.output_path = tmp_dir
+        .join(format!("{}.out", case_config.id))
+        .to_string_lossy()
+        .to_string();
+    config.error_path = tmp_dir
+        .join(format!("{}.err", case_config.id))
+        .to_string_lossy()
+        .to_string();
+    config.log_path = tmp_dir
+        .join(format!("{}.log", case_config.id))
+        .to_string_lossy()
+        .to_string();
+    let interactor = match problem_type {
+        ProblemType::Standard | ProblemType::Special => None,
+        ProblemType::Interactive => Some({
+            let path = get_path_by_id_name(&pid, "data/interactor", true).await?;
+            chmod_plus_x(&path).await?;
+            path
+        }),
+    };
+    info!(
+        "Judging submission {} on test case {} with interactor: {:?} AND config: {:?}",
+        submission_id, case_config.id, interactor, config
+    );
+    let res = judger::run(&config, interactor).map_err(|e| {
+        AijError::Judge(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "JUDGER_RUN_FAILED".to_string(),
+            format!("Judger run failed: {}", e),
+        )
+    })?;
+    info!(
+        "Judger result for test case {} of submission {}: {:?}",
+        case_config.id, submission_id, res
+    );
+    let truncated_len = AijConfig::get().output_truncate_length;
+    let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
+    let ans_content = match problem_type {
+        ProblemType::Standard | ProblemType::Special => {
+            get_text_by_path(&ans_path, Some(truncated_len)).await?
+        }
+        ProblemType::Interactive => Default::default(),
+    };
+    let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
+    let mut score = 0;
+    let (sys, r#type) = match res.result {
+        judger::ErrorCode::Success => {
+            let mut result = ("Accepted".to_string(), "Accepted");
+            if problem_type != ProblemType::Interactive {
+                match checker::check(
+                    &pid,
+                    &config.input_path,
+                    &config.output_path,
+                    &ans_path,
+                    checker_type,
+                )
+                .await?
+                {
+                    CheckerResult::Accepted => {}
+                    CheckerResult::PartiallyAccepted(score_f, detail) => {
+                        let score_i = (score_f * 100.0) as i32;
+                        result = (detail, "PartiallyAccepted");
+                        score = score_i;
+                    }
+                    CheckerResult::WrongAnswer(detail) => result = (detail, "WrongAnswer"),
+                }
+            }
+            result
+        }
+        judger::ErrorCode::WrongAnswer(s) => (s, "WrongAnswer"),
+        judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
+            ("Time Limit Exceeded".to_string(), "TimeLimitExceeded")
+        }
+        judger::ErrorCode::MemoryLimitExceeded => {
+            ("Memory Limit Exceeded".to_string(), "MemoryLimitExceeded")
+        }
+        judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), "RuntimeError"),
+        judger::ErrorCode::SystemError => {
+            let err_info = format!(
+                "Judger System Error on submission {} test case {}: {:?}",
+                submission_id, case_config.id, res
+            );
+            warn!("{err_info}");
+            (err_info, "SystemError")
+        }
+        _ => {
+            return Err(AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "UNEXPECTED_JUDGER_RESULT".to_string(),
+                format!(
+                    "Unexpected judger result: {:?} for submission {} on test case {}",
+                    res, submission_id, case_config.id
+                ),
+            ));
+        }
+    };
+    Ok(JudgeResultItem {
+        id: case_config.id,
+        time: res.cpu_time,
+        mem: res.memory,
+        sys,
+        r#in: in_content,
+        ans: ans_content,
+        out: out_content,
+        r#type: r#type.to_string(),
+        score: if r#type == "Accepted" { 100 } else { score },
+    })
 }
 
 /// Result of once judging
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JudgeResultItem {
     /// count of the test case
-    pub(crate) cnt: usize,
+    pub(crate) id: i32,
     /// real time used in milliseconds
     pub(crate) time: i32,
     /// memory used in bytes
@@ -345,13 +495,15 @@ pub(crate) struct JudgeResultItem {
     pub(crate) out: String,
     /// type of the result
     pub(crate) r#type: String,
+    /// score of the test case
+    pub(crate) score: i32,
 }
 
 /// Result of the judging process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
     CompileError(String),
-    MaybeError(Vec<JudgeResultItem>),
+    MaybeError(Vec<JudgeResultItem>, Vec<SubtaskConfig>),
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 {
   "pid": "1",
-  "description": "两数之和",
+  "description": "Updated problem description",
   "input": "一行两个正整数a, b($1 \\leq a, b \\leq 10^6$)。",
   "output": "一行一个正整数 $a+b$。",
   "hint": "",

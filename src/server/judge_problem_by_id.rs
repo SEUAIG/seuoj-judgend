@@ -94,9 +94,10 @@ pub(crate) async fn judge_problem_by_id(
                         "status": "CompileError",
                         "errorDetail": s,
                     }),
-                    JudgeResult::MaybeError(vec) => json!({
+                    JudgeResult::MaybeError(res_vec, subtasks) => json!({
                         "status": "Success",
-                        "resultDetail": vec,
+                        "resultDetail": res_vec,
+                        "subtasks": subtasks,
                     }),
                 }
             }
@@ -106,8 +107,8 @@ pub(crate) async fn judge_problem_by_id(
             }),
         };
         info!(
-            "Reporting result to backend for submission_id={}: {}",
-            &payload.submission_id, json_content
+            "Reporting result to backend for submission_id={}",
+            &payload.submission_id
         );
         let client = Client::new();
         match client.put(&server_addr).json(&json_content).send().await {

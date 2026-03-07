@@ -6,7 +6,7 @@
 
 use crate::config::AijConfig;
 use crate::server::{
-    edit_problem_by_id, get_config_source, get_problem_by_id, get_problem_tree,
+    edit_problem_by_id, get_problem_by_id, get_problem_config, get_problem_tree,
     judge_problem_by_id, put_problem_config, serve_problem_file, upload_problem_data,
 };
 use axum::Router;
@@ -30,7 +30,7 @@ pub fn app() -> Router {
         .route("/judge/submission", post(judge_problem_by_id))
         .route("/judge/problem/edit", patch(edit_problem_by_id))
         .route("/judge/problem/data/{pid}", post(upload_problem_data))
-        .route("/judge/problem/config/{pid}", get(get_config_source))
+        .route("/judge/problem/config/{pid}", get(get_problem_config))
         .route("/judge/problem/config/{pid}", put(put_problem_config))
         .route("/judge/problem/tree/{pid}", get(get_problem_tree))
         .route(

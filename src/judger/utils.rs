@@ -1,7 +1,9 @@
 use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
+use crate::schema::SubtaskConfig;
 use reqwest::StatusCode;
+use std::collections::HashMap;
 use std::path::Path;
 use tracing::error;
 
@@ -95,4 +97,52 @@ pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+pub(crate) fn get_topo_order(subtasks: &[SubtaskConfig]) -> Result<Vec<i32>> {
+    let mut subtask_graph = HashMap::new();
+    for subtask in subtasks {
+        for pre_id in &subtask.pre_subtasks {
+            subtask_graph
+                .entry(*pre_id)
+                .or_insert_with(Vec::new)
+                .push(subtask.id);
+        }
+    }
+    let mut topo_order = Vec::new();
+    let mut in_degree = HashMap::new();
+    for subtask in subtasks {
+        in_degree.insert(subtask.id, subtask.pre_subtasks.len());
+    }
+
+    let mut queue = std::collections::VecDeque::new();
+    for subtask in subtasks {
+        if subtask.pre_subtasks.is_empty() {
+            queue.push_back(subtask.id);
+        }
+    }
+
+    while let Some(u) = queue.pop_front() {
+        topo_order.push(u);
+        if let Some(neighbors) = subtask_graph.get(&u) {
+            for &v in neighbors {
+                if let Some(d) = in_degree.get_mut(&v) {
+                    *d -= 1;
+                    if *d == 0 {
+                        queue.push_back(v);
+                    }
+                }
+            }
+        }
+    }
+
+    if topo_order.len() != subtasks.len() {
+        return Err(AijError::Request(
+            StatusCode::BAD_REQUEST,
+            "CIRCULAR_DEPENDENCY".to_string(),
+            "Circular dependency detected among subtasks".to_string(),
+        ));
+    }
+
+    Ok(topo_order)
 }
