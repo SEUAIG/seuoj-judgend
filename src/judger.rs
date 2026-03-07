@@ -4,10 +4,10 @@ use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-use crate::schema::{CheckerType, ProblemConfig, ProblemType, TestCaseConfig};
+use crate::schema::{CheckerType, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use utils::chmod_plus_x;
 
 mod checker;
@@ -119,6 +119,11 @@ pub(crate) async fn judge(
         }
         SupportedLanguages::Nodejs22 => {
             let nodejs = AijConfig::get_binary_path("node").await?;
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             (
                 nodejs.to_string_lossy().to_string(),
                 vec![
@@ -149,6 +154,11 @@ pub(crate) async fn judge(
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
             }
+            problem_config.problem_info.memory_limit_kb =
+                match problem_config.problem_info.memory_limit_kb {
+                    -1 => -1,
+                    m => m * 2,
+                };
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
@@ -200,12 +210,12 @@ pub(crate) async fn judge(
     let checker_type = problem_config.problem_info.checker_type;
 
     let topo_order = utils::get_topo_order(&problem_config.subtasks)?;
+    let mut subtasks = problem_config.subtasks;
     if !topo_order.is_empty() {
         for sub_id in topo_order {
             info!("Judging subtask {} of submission {}", sub_id, submission_id);
             let mut have_error = false;
-            let case_ids: Vec<_> = problem_config
-                .subtasks
+            let case_ids: Vec<i32> = subtasks
                 .iter()
                 .find(|s| s.id == sub_id)
                 .ok_or_else(|| {
@@ -217,6 +227,7 @@ pub(crate) async fn judge(
                 })?
                 .cases
                 .clone();
+            let mut scores = Vec::new();
             for case_id in case_ids {
                 let case_config = problem_config
                     .testcases
@@ -239,8 +250,44 @@ pub(crate) async fn judge(
                     &tmp_dir,
                 )
                 .await?;
+                scores.push(res.score);
                 out_vec.push(res.clone());
                 have_error = res.r#type != "Accepted";
+            }
+            let subtask_type = subtasks
+                .iter()
+                .find(|s| s.id == sub_id)
+                .map(|s| s.r#type.as_str())
+                .unwrap_or("min");
+            match subtask_type {
+                "min" => {
+                    let min_score = scores.into_iter().min().unwrap_or(0);
+                    if let Some(subtask_config) = subtasks.iter_mut().find(|s| s.id == sub_id) {
+                        subtask_config.score =
+                            ((min_score * subtask_config.score) as f64 / 100.0) as i32;
+                    } else {
+                        return Err(AijError::Judge(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "SUBTASK_NOT_FOUND".to_string(),
+                            format!("Subtask with id {} not found in problem config", sub_id),
+                        ));
+                    }
+                }
+                "sum" => {
+                    let len = scores.len();
+                    let avg_score: f64 = scores.into_iter().sum::<i32>() as f64 / len as f64;
+                    if let Some(subtask_config) = subtasks.iter_mut().find(|s| s.id == sub_id) {
+                        subtask_config.score =
+                            ((avg_score * subtask_config.score as f64) / 100.0) as i32;
+                    }
+                }
+                _ => {
+                    return Err(AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "INVALID_SUBTASK_TYPE".to_string(),
+                        format!("Invalid subtask type: {}", subtask_type),
+                    ));
+                }
             }
             if have_error {
                 break;
@@ -263,7 +310,7 @@ pub(crate) async fn judge(
             out_vec.push(res);
         }
     }
-    Ok(JudgeResult::MaybeError(out_vec))
+    Ok(JudgeResult::MaybeError(out_vec, subtasks))
 }
 
 async fn judge_single_case(
@@ -425,7 +472,7 @@ pub(crate) struct JudgeResultItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
     CompileError(String),
-    MaybeError(Vec<JudgeResultItem>),
+    MaybeError(Vec<JudgeResultItem>, Vec<SubtaskConfig>),
 }
 
 #[cfg(test)]

@@ -94,9 +94,10 @@ pub(crate) async fn judge_problem_by_id(
                         "status": "CompileError",
                         "errorDetail": s,
                     }),
-                    JudgeResult::MaybeError(vec) => json!({
+                    JudgeResult::MaybeError(res_vec, subtasks) => json!({
                         "status": "Success",
-                        "resultDetail": vec,
+                        "resultDetail": res_vec,
+                        "subtasks": subtasks,
                     }),
                 }
             }
