@@ -10,7 +10,7 @@ use tracing::error;
 
 pub(crate) enum CheckerResult {
     Accepted,
-    PartiallyAccepted(f64),
+    PartiallyAccepted(f64, String),
     WrongAnswer(String),
 }
 

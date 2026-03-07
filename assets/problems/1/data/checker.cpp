@@ -9,5 +9,5 @@ int main(int argc, char* argv[]) {
     if (pans == jans)
         quitf(_ok, "");
     else
-        quitf(_wa, "expected = %d, found = %d", jans, pans);
+        quitp(0.5, "Expected %d, found %d, but I'm good, so i will give you half points", jans, pans);
 }

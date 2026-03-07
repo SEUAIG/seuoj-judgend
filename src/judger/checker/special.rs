@@ -52,9 +52,13 @@ pub(crate) async fn special_checker(
             Some(0) => Ok(CheckerResult::Accepted),
             Some(7) => {
                 if let Some(stripped) = checker_message.strip_prefix("points") {
-                    let points_str = stripped.trim();
+                    let stripped = stripped.trim();
+                    let points_str = stripped.split_whitespace().next().unwrap_or("");
+                    let left_over_message = stripped[points_str.len()..].trim().to_string();
                     match points_str.parse::<f64>() {
-                        Ok(points) => Ok(CheckerResult::PartiallyAccepted(points)),
+                        Ok(points) => {
+                            Ok(CheckerResult::PartiallyAccepted(points, left_over_message))
+                        }
                         Err(e) => {
                             error!(
                                 "Checker of problem {} returned code 7 but failed to parse points: {}, error: {}",

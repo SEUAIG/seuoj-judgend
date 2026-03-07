@@ -211,11 +211,15 @@ pub(crate) async fn judge(
     let checker_type = problem_config.problem_info.checker_type;
 
     let topo_order = utils::get_topo_order(&problem_config.subtasks)?;
+    info!(
+        "Topological order of subtasks for problem {}: {:?}",
+        pid, topo_order
+    );
     let mut subtasks = problem_config.subtasks;
     if !topo_order.is_empty() {
+        let mut have_error = false;
         for sub_id in topo_order {
             info!("Judging subtask {} of submission {}", sub_id, submission_id);
-            let mut have_error = false;
             let case_ids: Vec<i32> = subtasks
                 .iter()
                 .find(|s| s.id == sub_id)
@@ -241,6 +245,15 @@ pub(crate) async fn judge(
                             format!("Test case with id {} not found in problem config", case_id),
                         )
                     })?;
+                if have_error {
+                    out_vec.push(JudgeResultItem {
+                        id: case_config.id,
+                        sys: "Skipped due to previous error in subtask".to_string(),
+                        r#type: "Skipped".to_string(),
+                        ..Default::default()
+                    });
+                    continue;
+                }
                 let res = judge_single_case(
                     case_config,
                     (&pid, &submission_id),
@@ -289,9 +302,6 @@ pub(crate) async fn judge(
                         format!("Invalid subtask type: {}", subtask_type),
                     ));
                 }
-            }
-            if have_error {
-                break;
             }
         }
     } else {
@@ -402,15 +412,10 @@ async fn judge_single_case(
                 )
                 .await?
                 {
-                    CheckerResult::Accepted => {
-                        score = 100;
-                    }
-                    CheckerResult::PartiallyAccepted(score_f) => {
+                    CheckerResult::Accepted => {}
+                    CheckerResult::PartiallyAccepted(score_f, detail) => {
                         let score_i = (score_f * 100.0) as i32;
-                        result = (
-                            format!("Partially Accepted ({})", score_i),
-                            "PartiallyAccepted",
-                        );
+                        result = (detail, "PartiallyAccepted");
                         score = score_i;
                     }
                     CheckerResult::WrongAnswer(detail) => result = (detail, "WrongAnswer"),
@@ -454,12 +459,12 @@ async fn judge_single_case(
         ans: ans_content,
         out: out_content,
         r#type: r#type.to_string(),
-        score,
+        score: if r#type == "Accepted" { 100 } else { score },
     })
 }
 
 /// Result of once judging
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct JudgeResultItem {
     /// count of the test case
     pub(crate) id: i32,
