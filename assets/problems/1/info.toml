@@ -10,12 +10,5 @@ in_path = "1.in"
 ans_path = "1.ans"
 weight = 1.0
 
-[[subtasks]]
-id = 1
-cases = [1]
-pre_subtasks = []
-score = 100
-type = "min"
-
 [custom_modules]
 checker_path = "checker.cpp"
