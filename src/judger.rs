@@ -13,6 +13,7 @@ use utils::chmod_plus_x;
 mod checker;
 mod utils;
 
+use crate::judger::checker::CheckerResult;
 pub(crate) use utils::compile;
 
 /// Supported programming languages for the judger system.
@@ -387,20 +388,32 @@ async fn judge_single_case(
         ProblemType::Interactive => Default::default(),
     };
     let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
+    let mut score = 0;
     let (sys, r#type) = match res.result {
         judger::ErrorCode::Success => {
             let mut result = ("Accepted".to_string(), "Accepted");
             if problem_type != ProblemType::Interactive {
-                let (res, detail) = checker::check(
+                match checker::check(
                     &pid,
                     &config.input_path,
                     &config.output_path,
                     &ans_path,
                     checker_type,
                 )
-                .await?;
-                if !res {
-                    result = (detail, "WrongAnswer")
+                .await?
+                {
+                    CheckerResult::Accepted => {
+                        score = 100;
+                    }
+                    CheckerResult::PartiallyAccepted(score_f) => {
+                        let score_i = (score_f * 100.0) as i32;
+                        result = (
+                            format!("Partially Accepted ({})", score_i),
+                            "PartiallyAccepted",
+                        );
+                        score = score_i;
+                    }
+                    CheckerResult::WrongAnswer(detail) => result = (detail, "WrongAnswer"),
                 }
             }
             result
@@ -441,7 +454,7 @@ async fn judge_single_case(
         ans: ans_content,
         out: out_content,
         r#type: r#type.to_string(),
-        score: if r#type == "Accepted" { 100 } else { 0 },
+        score,
     })
 }
 

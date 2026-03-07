@@ -21,17 +21,6 @@ async fn test_put_problem_config() {
                 "ans_path": "1.ans"
             }
         ],
-        "subtasks": [
-            {
-                "id": 1,
-                "cases": [
-                    1
-                ],
-                "pre_subtasks": [],
-                "score": 100,
-                "type": "min"
-            }
-        ],
         "custom_modules": {
             "checker_path": "checker.cpp"
         }

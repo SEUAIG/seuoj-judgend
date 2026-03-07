@@ -1,4 +1,5 @@
 use crate::fs::get_path_by_id_name;
+use crate::judger::checker::CheckerResult;
 use crate::judger::utils::chmod_plus_x;
 use axum::http::StatusCode;
 use std::path::Path;
@@ -9,7 +10,7 @@ pub(crate) async fn special_checker(
     input_path: impl AsRef<Path>,
     output_path: impl AsRef<Path>,
     ans_path: impl AsRef<Path>,
-) -> crate::error::Result<(bool, String)> {
+) -> crate::error::Result<CheckerResult> {
     {
         info!("Using special checker for problem {}", problem_id.as_ref());
         let checker_path = get_path_by_id_name(problem_id.as_ref(), "data/checker", true).await?;
@@ -47,10 +48,40 @@ pub(crate) async fn special_checker(
                 )
             })?;
         let checker_message = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if output.status.success() {
-            Ok((true, String::new()))
-        } else {
-            Ok((false, checker_message))
+        match output.status.code() {
+            Some(0) => Ok(CheckerResult::Accepted),
+            Some(7) => {
+                if let Some(stripped) = checker_message.strip_prefix("points") {
+                    let points_str = stripped.trim();
+                    match points_str.parse::<f64>() {
+                        Ok(points) => Ok(CheckerResult::PartiallyAccepted(points)),
+                        Err(e) => {
+                            error!(
+                                "Checker of problem {} returned code 7 but failed to parse points: {}, error: {}",
+                                problem_id.as_ref(),
+                                checker_message,
+                                e
+                            );
+                            Ok(CheckerResult::WrongAnswer(format!(
+                                "Invalid points format: {}",
+                                checker_message
+                            )))
+                        }
+                    }
+                } else {
+                    error!(
+                        "Checker of problem {} returned code 7 but no points message: {}",
+                        problem_id.as_ref(),
+                        checker_message
+                    );
+                    Ok(CheckerResult::WrongAnswer(format!(
+                        "Missing points message: {}",
+                        checker_message
+                    )))
+                }
+            }
+
+            _ => Ok(CheckerResult::WrongAnswer(checker_message)),
         }
     }
 }
@@ -65,6 +96,6 @@ mod tests {
         let res = super::special_checker("1", input_path, output_path, ans_path)
             .await
             .unwrap();
-        assert!(res.0);
+        assert!(matches!(res, super::CheckerResult::Accepted));
     }
 }

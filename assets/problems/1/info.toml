@@ -1,3 +1,5 @@
+subtasks = []
+
 [problem_info]
 problem_type = "Special"
 checker_type = "Special"
