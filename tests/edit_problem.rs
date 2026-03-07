@@ -1,6 +1,4 @@
 use crate::utils::get_test_server;
-use base64::Engine;
-use base64::engine::general_purpose;
 use serde_json::json;
 
 mod utils;
@@ -8,15 +6,11 @@ mod utils;
 async fn test_edit_problem() {
     let server = get_test_server().await;
 
-    let checker_path = "./assets/problems/1/checker";
-    let base64_checker = general_purpose::STANDARD
-        .encode(std::fs::read(checker_path).expect("Failed to read checker file"));
-
     let response = server
         .patch("/judge/problem/edit")
         .json(&json!({
             "pid": "1",
-            "checker": {"type": "Binary", "data": base64_checker},
+            "description": "Updated problem description",
         }))
         .await;
     response.assert_status_ok();

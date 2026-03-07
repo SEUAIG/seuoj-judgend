@@ -12,7 +12,7 @@ pub(crate) async fn special_checker(
 ) -> crate::error::Result<(bool, String)> {
     {
         info!("Using special checker for problem {}", problem_id.as_ref());
-        let checker_path = get_path_by_id_name(problem_id.as_ref(), "checker", true).await?;
+        let checker_path = get_path_by_id_name(problem_id.as_ref(), "data/checker", true).await?;
         chmod_plus_x(&checker_path).await.map_err(|e| {
             let message = format!(
                 "Failed to set execute permission for checker of problem {}: {}",

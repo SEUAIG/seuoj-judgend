@@ -4,9 +4,7 @@ use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
-pub(crate) use crate::judger::utils::{
-    CheckerType, ProblemCase, ProblemInfo, ProblemType, compile,
-};
+use crate::schema::{ProblemConfig, ProblemType};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -14,6 +12,8 @@ use utils::chmod_plus_x;
 
 mod checker;
 mod utils;
+
+pub(crate) use utils::compile;
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -35,7 +35,7 @@ pub(crate) async fn judge(
     language: SupportedLanguages,
     submission_id: String,
 ) -> Result<JudgeResult> {
-    let mut problem_info = ProblemInfo::from_pid(&pid).await?;
+    let mut problem_config = ProblemConfig::from_pid(&pid).await?;
     let tmp_dir = get_dir_by_submission_id(&submission_id).await?;
     let source_file_extension = match language {
         SupportedLanguages::C => "c",
@@ -102,16 +102,11 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
         SupportedLanguages::Python3_12 => {
-            problem_info.max_real_time_ms = match problem_info.max_real_time_ms {
-                Some(-1) => Some(-1),
-                Some(m) => Some(m * 2),
-                None => None,
-            };
-            problem_info.max_cpu_time_ms = match problem_info.max_cpu_time_ms {
-                Some(-1) => Some(-1),
-                Some(m) => Some(m * 2),
-                None => None,
-            };
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             let python3 = AijConfig::get_binary_path("python3").await?;
             (
                 python3.to_string_lossy().to_string(),
@@ -157,16 +152,11 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
-            problem_info.max_real_time_ms = match problem_info.max_real_time_ms {
-                Some(-1) => Some(-1),
-                Some(m) => Some(m * 2),
-                None => None,
-            };
-            problem_info.max_cpu_time_ms = match problem_info.max_cpu_time_ms {
-                Some(-1) => Some(-1),
-                Some(m) => Some(m * 2),
-                None => None,
-            };
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
             let javac = AijConfig::get_binary_path("javac").await?;
             let compile_output = tokio::process::Command::new(javac)
                 .arg(&source_file_path)
@@ -183,103 +173,79 @@ pub(crate) async fn judge(
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
             }
-            let max_memory = problem_info.max_memory_byte.ok_or_else(|| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "MAX_MEMORY_NOT_SPECIFIED".to_string(),
-                    format!(
-                        "Max memory is not specified for problem `{}` (expected in info.json)",
-                        pid
-                    ),
-                )
-            })? / (512 * 1024);
+            let mut args = vec![
+                "java".to_string(),
+                "-cp".to_string(),
+                tmp_dir.to_string_lossy().to_string(),
+                "Main".to_string(),
+            ];
+            if problem_config.problem_info.memory_limit_kb != -1 {
+                args.insert(
+                    1,
+                    format!("-Xmx{}m", problem_config.problem_info.memory_limit_kb / 512),
+                );
+            };
             let java = AijConfig::get_binary_path("java").await?;
             (
                 java.to_string_lossy().to_string(),
-                vec![
-                    java.to_string_lossy().to_string(),
-                    format!("-Xmx{}m", max_memory),
-                    "-cp".to_string(),
-                    tmp_dir.to_string_lossy().to_string(),
-                    "Main".to_string(),
-                ],
+                args,
                 judger::SeccompRuleName::Java,
             )
         }
     };
-    let mut config = problem_info.to_judger_config();
-    config.seccomp_rule_name = Some(seccomp_rule);
+    let mut judge_config = problem_config.problem_info.to_judger_config();
+    judge_config.seccomp_rule_name = Some(seccomp_rule);
     let mut out_vec = vec![];
-    let case_info = ProblemCase::from_pid(&pid).await?;
-    let problem_type = problem_info.problem_type.ok_or_else(|| {
-        AijError::Judge(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "PROBLEM_TYPE_NOT_SPECIFIED".to_string(),
-            format!(
-                "Problem type is not specified for problem `{}` (expected in info.json)",
-                pid
-            ),
-        )
-    })?;
-    let checker_type = problem_info.checker_type.ok_or_else(|| {
-        AijError::Judge(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "CHECKER_TYPE_NOT_SPECIFIED".to_string(),
-            format!(
-                "Checker type is not specified for problem `{}` (expected in info.json)",
-                pid
-            ),
-        )
-    })?;
-    for case in case_info.test_cases {
-        let input_path = get_path_by_id_name(&pid, format!("data/{}", case.in_name), true).await?;
+    let case_map = problem_config.testcases;
+    let problem_type = problem_config.problem_info.problem_type;
+    let checker_type = problem_config.problem_info.checker_type;
+    // todo! subtask judge
+    // for now we just judge all test cases and return the result list
+    for (id, case_config) in case_map {
+        let input_path =
+            get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
         let ans_path = match problem_type {
-            ProblemType::Standard => {
-                get_path_by_id_name(
-                    &pid,
-                    format!("data/{}", case.ans_name.ok_or_else(|| {
-                        AijError::Judge(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "ANSWER_FILE_NAME_NOT_SPECIFIED".to_string(),
-                            format!(
-                                "Answer file name is not specified for test case {} of problem {}",
-                                case.id, pid
-                            ),
-                        )
-                    })?),
-                    true,
-                )
-                .await?
+            ProblemType::Standard | ProblemType::Special => {
+                get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
             }
-            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case.id)),
+            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", id)),
         };
-        let mut config = config.clone();
+        let mut config = judge_config.clone();
+        if let Some(time_limit) = case_config.time_limit_ms {
+            config.max_cpu_time = time_limit;
+            config.max_real_time = time_limit * 2;
+        }
+        if let Some(memory_limit) = case_config.memory_limit_kb {
+            config.max_memory = memory_limit * 1024;
+            config.max_stack = memory_limit * 1024;
+            config.max_output_size = memory_limit * 1024;
+        }
         config.exe_path = exec_path.clone();
         config.args = args.clone();
         config.input_path = input_path.to_string_lossy().to_string();
         config.output_path = tmp_dir
-            .join(format!("{}.out", case.id))
+            .join(format!("{}.out", id))
             .to_string_lossy()
             .to_string();
         config.error_path = tmp_dir
-            .join(format!("{}.err", case.id))
+            .join(format!("{}.err", id))
             .to_string_lossy()
             .to_string();
         config.log_path = tmp_dir
-            .join(format!("{}.log", case.id))
+            .join(format!("{}.log", id))
             .to_string_lossy()
             .to_string();
         let interactor = match problem_type {
-            ProblemType::Standard => None,
+            ProblemType::Standard | ProblemType::Special => None,
             ProblemType::Interactive => Some({
-                let path = get_path_by_id_name(&pid, "interactor", true).await?;
+                let path = get_path_by_id_name(&pid, "data/interactor", true).await?;
                 chmod_plus_x(&path).await?;
                 path
             }),
         };
         info!(
             "Judging submission {} on test case {} with interactor: {:?} AND config: {:?}",
-            submission_id, case.id, interactor, config
+            submission_id, id, interactor, config
         );
         let res = judger::run(&config, interactor).map_err(|e| {
             AijError::Judge(
@@ -290,12 +256,14 @@ pub(crate) async fn judge(
         })?;
         info!(
             "Judger result for test case {} of submission {}: {:?}",
-            case.id, submission_id, res
+            id, submission_id, res
         );
         let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
         let ans_content = match problem_type {
-            ProblemType::Standard => get_text_by_path(&ans_path, Some(truncated_len)).await?,
+            ProblemType::Standard | ProblemType::Special => {
+                get_text_by_path(&ans_path, Some(truncated_len)).await?
+            }
             ProblemType::Interactive => Default::default(),
         };
         let out_content = get_text_by_path(&config.output_path, Some(truncated_len)).await?;
@@ -328,7 +296,7 @@ pub(crate) async fn judge(
             judger::ErrorCode::SystemError => {
                 let err_info = format!(
                     "Judger System Error on submission {} test case {}: {:?}",
-                    submission_id, case.id, res
+                    submission_id, id, res
                 );
                 warn!("{err_info}");
                 (err_info, "SystemError")
@@ -339,13 +307,13 @@ pub(crate) async fn judge(
                     "UNEXPECTED_JUDGER_RESULT".to_string(),
                     format!(
                         "Unexpected judger result: {:?} for submission {} on test case {}",
-                        res, submission_id, case.id
+                        res, submission_id, id
                     ),
                 ));
             }
         };
         out_vec.push(JudgeResultItem {
-            cnt: case.id,
+            cnt: id.parse::<usize>().unwrap_or(0),
             time: res.cpu_time,
             mem: res.memory,
             sys,
@@ -388,23 +356,26 @@ pub(crate) enum JudgeResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::judger::{ProblemCase, ProblemInfo, ProblemType};
+    use crate::schema::{ProblemConfig, ProblemMetadata};
 
     #[tokio::test]
     async fn test_problem_info_from_pid() {
         let pid = "1";
-        let info = ProblemInfo::from_pid(pid).await;
-        assert!(info.is_ok());
-        let info = info.unwrap();
-        assert_eq!(info.problem_type, Some(ProblemType::Standard));
+        let metadata = ProblemMetadata::from_pid(pid).await;
+        println!("Metadata for problem {}: {:?}", pid, metadata);
+        assert!(metadata.is_ok());
+        let metadata = metadata.unwrap();
+        assert_eq!(metadata.example.len(), 1);
+        assert_eq!(metadata.example[0].ans, "3");
     }
 
     #[tokio::test]
     async fn test_case_info_from_pid() {
         let pid = "1";
-        let cases = ProblemCase::from_pid(pid).await;
+        let cases = ProblemConfig::from_pid(pid).await;
+        println!("Cases for problem {}: {:?}", pid, cases);
         assert!(cases.is_ok());
         let cases = cases.unwrap();
-        assert_eq!(cases.test_cases.len(), 1);
+        assert_eq!(cases.testcases.len(), 1);
     }
 }

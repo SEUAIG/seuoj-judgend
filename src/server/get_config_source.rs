@@ -27,13 +27,13 @@ pub(crate) async fn get_config_source(
 
     match r#type.as_str() {
         "META" => {
-            let content = fs::read_file_by_id_name(&pid, "info.toml").await?;
+            let content = fs::read_file_by_id_name(&pid, "problem.json").await?;
             Ok(Json(
                 json!({ "code": 0, "message": "Success", "data": {"config": content} }),
             ))
         }
-        "CASE" => {
-            let content = fs::read_file_by_id_name(&pid, "data/case.toml")
+        "INFO" => {
+            let content = fs::read_file_by_id_name(&pid, "info.toml")
                 .await
                 .unwrap_or_default();
             Ok(Json(
@@ -43,7 +43,7 @@ pub(crate) async fn get_config_source(
         _ => Err(crate::error::AijError::Request(
             StatusCode::BAD_REQUEST,
             "INVALID_TYPE".to_string(),
-            format!("Invalid type: {}. Expected 'META' or 'CASE'", r#type),
+            format!("Invalid type: {}. Expected 'META' or 'INFO'", r#type),
         )),
     }
 }

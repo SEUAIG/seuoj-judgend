@@ -1,6 +1,5 @@
 use crate::error::{AijError, Result};
 use crate::fs;
-use crate::judger::ProblemCase;
 use axum::Json;
 use axum::extract::{Multipart, Path};
 use axum::http::StatusCode;
@@ -67,14 +66,13 @@ pub(crate) async fn upload_problem_data(
     {
         match format.as_str() {
             "zip" => {
-                let tmp_path = fs::get_path_by_id_name(&pid, "tmpdata/", false).await?;
+                let uuid = uuid::Uuid::new_v4().to_string();
+                let tmp_path = fs::get_path_by_id_name(&pid, format!("tmp_{uuid}/"), false).await?;
                 match fs::unzip_bytes_to_path(file, &tmp_path).await {
                     Ok(_) => {
                         let data_path = fs::get_path_by_id_name(&pid, "data/", false).await?;
                         fs::remove_dir_all(&data_path).await?;
                         fs::rename(tmp_path, data_path).await?;
-                        let problem_case = ProblemCase::default();
-                        problem_case.save(&pid).await?;
                     }
                     Err(e) => {
                         error!("Failed to unzip file for problem id: {}", &pid);
