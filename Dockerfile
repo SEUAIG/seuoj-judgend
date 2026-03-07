@@ -1,6 +1,13 @@
 # --- 第一阶段：编译 Rust 程序 (使用最新稳定版) ---
 FROM rust:latest AS builder
 
+# 替换为中国国内镜像源 (Debian bookworm)
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
+
+# 配置 Cargo 使用中科大镜像
+RUN mkdir -p /usr/local/cargo/ && \
+    echo '[source.crates-io]\nreplace-with = "ustc"\n\n[source.ustc]\nregistry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > /usr/local/cargo/config.toml
+
 # 安装 libseccomp 开发库
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -18,6 +25,10 @@ FROM ubuntu:24.04 AS runtime
 
 # 设置为非交互模式，避免安装过程弹出时区等确认
 ENV DEBIAN_FRONTEND=noninteractive
+
+# 替换为中国国内镜像源 (Ubuntu 24.04 noble)
+RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources && \
+    sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources
 
 # 更新源并安装所有运行所需的语言和工具
 # Ubuntu 24.04 默认提供：
