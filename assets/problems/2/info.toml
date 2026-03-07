@@ -4,20 +4,30 @@ checker_type = "interactor"
 time_limit_ms = 1000
 memory_limit_kb = 256000
 
-[testcases."1"]
+[[testcases]]
+id = 1
 in_path = "1.in"
 ans_path = "1.ans"
 weight = 1.0
 
-[testcases."2"]
+[[testcases]]
+id = 2
 in_path = "2.aaa"
 ans_path = "2.bbb"
 weight = 1.0
 
-[subtasks."1"]
-cases = ["1", "2"]
+[[subtasks]]
+id = 1
+cases = [1]
 pre_subtasks = []
-score = 100
+score = 50
+type = "min"
+
+[[subtasks]]
+id = 2
+cases = [2]
+pre_subtasks = [1]
+score = 50
 type = "min"
 
 [custom_modules]

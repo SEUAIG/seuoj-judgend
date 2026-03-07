@@ -3,9 +3,9 @@ use crate::fs;
 use crate::fs::check_problem_exists;
 use crate::schema::{ProblemExample, ProblemMetadata};
 use crate::server::AppJson;
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -128,16 +128,7 @@ pub(crate) async fn edit_problem_by_id(
             .collect();
     }
 
-    let metadata_json = serde_json::to_string_pretty(&metadata).map_err(|e| {
-        error!("Failed to serialize problem metadata: {}", e);
-        crate::error::AijError::Request(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "FAILED_SERIALIZE_PROBLEM_METADATA".to_string(),
-            format!("Failed to serialize problem metadata: {}", e),
-        )
-    })?;
-    let metadata_path = fs::get_path_by_id_name(problem_id, "problem.json", false).await?;
-    fs::write_to_file(&metadata_path, metadata_json).await?;
+    metadata.save(problem_id).await?;
 
     info!(
         "Successfully {} problem with id: {}",

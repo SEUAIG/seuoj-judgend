@@ -88,13 +88,13 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "COMPILE_ERROR".to_string(),
-                    format!("Failed to compile source code: {}", e),
-                )
-            })?;
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
                 return Ok(JudgeResult::CompileError(stderr.to_string()));
@@ -196,19 +196,18 @@ pub(crate) async fn judge(
     let mut judge_config = problem_config.problem_info.to_judger_config();
     judge_config.seccomp_rule_name = Some(seccomp_rule);
     let mut out_vec = vec![];
-    let case_map = problem_config.testcases;
     let problem_type = problem_config.problem_info.problem_type;
     let checker_type = problem_config.problem_info.checker_type;
     // todo! subtask judge
     // for now we just judge all test cases and return the result list
-    for (id, case_config) in case_map {
+    for case_config in problem_config.testcases {
         let input_path =
             get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
         let ans_path = match problem_type {
             ProblemType::Standard | ProblemType::Special => {
                 get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
             }
-            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", id)),
+            ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case_config.id)),
         };
         let mut config = judge_config.clone();
         if let Some(time_limit) = case_config.time_limit_ms {
@@ -224,15 +223,15 @@ pub(crate) async fn judge(
         config.args = args.clone();
         config.input_path = input_path.to_string_lossy().to_string();
         config.output_path = tmp_dir
-            .join(format!("{}.out", id))
+            .join(format!("{}.out", case_config.id))
             .to_string_lossy()
             .to_string();
         config.error_path = tmp_dir
-            .join(format!("{}.err", id))
+            .join(format!("{}.err", case_config.id))
             .to_string_lossy()
             .to_string();
         config.log_path = tmp_dir
-            .join(format!("{}.log", id))
+            .join(format!("{}.log", case_config.id))
             .to_string_lossy()
             .to_string();
         let interactor = match problem_type {
@@ -245,7 +244,7 @@ pub(crate) async fn judge(
         };
         info!(
             "Judging submission {} on test case {} with interactor: {:?} AND config: {:?}",
-            submission_id, id, interactor, config
+            submission_id, case_config.id, interactor, config
         );
         let res = judger::run(&config, interactor).map_err(|e| {
             AijError::Judge(
@@ -256,7 +255,7 @@ pub(crate) async fn judge(
         })?;
         info!(
             "Judger result for test case {} of submission {}: {:?}",
-            id, submission_id, res
+            case_config.id, submission_id, res
         );
         let truncated_len = AijConfig::get().output_truncate_length;
         let in_content = get_text_by_path(&config.input_path, Some(truncated_len)).await?;
@@ -278,7 +277,7 @@ pub(crate) async fn judge(
                         &ans_path,
                         checker_type,
                     )
-                    .await?;
+                        .await?;
                     if !res {
                         result = (detail, "WrongAnswer")
                     }
@@ -296,7 +295,7 @@ pub(crate) async fn judge(
             judger::ErrorCode::SystemError => {
                 let err_info = format!(
                     "Judger System Error on submission {} test case {}: {:?}",
-                    submission_id, id, res
+                    submission_id, case_config.id, res
                 );
                 warn!("{err_info}");
                 (err_info, "SystemError")
@@ -307,13 +306,13 @@ pub(crate) async fn judge(
                     "UNEXPECTED_JUDGER_RESULT".to_string(),
                     format!(
                         "Unexpected judger result: {:?} for submission {} on test case {}",
-                        res, submission_id, id
+                        res, submission_id, case_config.id
                     ),
                 ));
             }
         };
         out_vec.push(JudgeResultItem {
-            cnt: id.parse::<usize>().unwrap_or(0),
+            id: case_config.id,
             time: res.cpu_time,
             mem: res.memory,
             sys,
@@ -330,7 +329,7 @@ pub(crate) async fn judge(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct JudgeResultItem {
     /// count of the test case
-    pub(crate) cnt: usize,
+    pub(crate) id: i32,
     /// real time used in milliseconds
     pub(crate) time: i32,
     /// memory used in bytes
