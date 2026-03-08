@@ -94,10 +94,10 @@ pub(crate) async fn special_checker(
 mod tests {
     #[tokio::test]
     async fn test_special_checker() {
-        let input_path = "assets/problems/1/data/1.in";
-        let output_path = "assets/problems/1/data/1.ans";
-        let ans_path = "assets/problems/1/data/1.ans";
-        let res = super::special_checker("1", input_path, output_path, ans_path)
+        let input_path = "assets/problems/p01/data/1.in";
+        let output_path = "assets/problems/p01/data/1.ans";
+        let ans_path = "assets/problems/p01/data/1.ans";
+        let res = super::special_checker("p01", input_path, output_path, ans_path)
             .await
             .unwrap();
         assert!(matches!(res, super::CheckerResult::Accepted));
