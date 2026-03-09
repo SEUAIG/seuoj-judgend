@@ -10,7 +10,7 @@ async fn test_submission() {
         .post("/judge/submission")
         .json(&json!({
             "submissionId": "123",
-            "pid": "1",
+            "pid": "p01",
             "code": "#include<bits/stdc++.h>\nint main(){std::cout << 3 << std::endl;}",
             "language": "Cpp"
         }))
@@ -27,7 +27,7 @@ async fn test_submission() {
         .post("/judge/submission")
         .json(&json!({
             "submissionId": "111",
-            "pid": "2",
+            "pid": "p02",
             "code": "#include<bits/stdc++.h>\nint main(){int n; std::cin>>n; while(n--){int a, b; std::cin >> a >> b;std::cout << a + b << std::endl;}}",
             "language": "Cpp"
         }))

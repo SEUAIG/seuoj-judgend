@@ -8,7 +8,7 @@ async fn test_put_problem_config() {
     let server = get_test_server().await;
 
     let response = server
-        .put("/judge/problem/config/1")
+        .put("/judge/problem/config/p01")
         .json(&json!({
         "problem_info": {
             "problem_type": "special",
