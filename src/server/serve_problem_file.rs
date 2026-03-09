@@ -14,21 +14,9 @@ pub(crate) async fn get_problem_file(
     fs::assert_problem_exists(&pid).await?;
     let file_content = match filename.as_str() {
         "data.zip" => {
-            let tmp_dir = tempfile::tempdir().map_err(
-                |e| AijError::Server(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "TEMP_DIR_CREATION_FAILED".to_string(),
-                    format!("Failed to create temporary directory for zipping data files of problem {}: {}", pid, e),
-                )
-            )?;
-            let tmp_zip_path = tmp_dir.path().join("data.zip");
             let data_paths = fs::get_data_paths_by_id(&pid).await?;
-            info!(
-                "Creating zip file for data files of problem {} to {:?}",
-                pid, &tmp_zip_path
-            );
-            fs::create_zip_file(&data_paths, &tmp_zip_path).await?;
-            fs::get_stream_by_path(tmp_zip_path).await?
+            info!("Creating zip stream for data files of problem {}", pid,);
+            fs::create_zip_stream(data_paths).await?
         }
         _ => {
             fs::validate_filename(&filename)?;

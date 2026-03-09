@@ -38,4 +38,7 @@ async fn test_get_problem_file_zip() {
     response.assert_status(StatusCode::OK);
     response.assert_header("content-disposition", "attachment; filename=\"data.zip\"");
     response.assert_header("content-type", "application/octet-stream");
+
+    let body = response.as_bytes();
+    assert!(!body.is_empty(), "Expected non-empty zip file content");
 }

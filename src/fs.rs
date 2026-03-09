@@ -4,12 +4,15 @@ use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::schema::ProblemMetadata;
 use axum::http::StatusCode;
+use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::io::AsyncReadExt;
 use tokio::sync::OnceCell;
+use tokio_util::bytes::Bytes;
 use tokio_util::io::ReaderStream;
 use tracing::warn;
 use zip::ZipWriter;
@@ -177,7 +180,7 @@ pub(crate) async fn get_text_by_path(
 
 pub(crate) async fn get_stream_by_path(
     path: impl AsRef<Path>,
-) -> Result<ReaderStream<tokio::fs::File>> {
+) -> Result<BoxStream<'static, std::io::Result<Bytes>>> {
     let file = tokio::fs::File::open(path.as_ref()).await.map_err(|e| {
         warn!(
             "Failed to open file {}: {}",
@@ -194,7 +197,7 @@ pub(crate) async fn get_stream_by_path(
             ),
         )
     })?;
-    Ok(ReaderStream::new(file))
+    Ok(ReaderStream::new(file).boxed())
 }
 
 pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
@@ -285,27 +288,74 @@ pub(crate) async fn unzip_bytes_to_path(
     let path_buf = path.as_ref().to_path_buf();
     let bytes_vec = bytes.as_ref().to_vec();
 
-    tokio::task::spawn_blocking(move || -> std::result::Result<(), String> {
+    tokio::task::spawn_blocking(move || -> Result<()> {
         let reader = std::io::Cursor::new(bytes_vec);
-        let mut zip = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
+        let mut zip = zip::ZipArchive::new(reader).map_err(|e| {
+            warn!("Failed to read zip archive: {}", e);
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "READ_ZIP_FAILED".to_string(),
+                format!("Failed to read zip archive: {}", e),
+            )
+        })?;
 
         for i in 0..zip.len() {
-            let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
+            let mut file = zip.by_index(i).map_err(|e| {
+                warn!("Failed to access file in zip archive: {}", e);
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "ACCESS_ZIP_FILE_FAILED".to_string(),
+                    format!("Failed to access file in zip archive: {}", e),
+                )
+            })?;
 
-            validate_filename(file.name()).map_err(|e| e.to_string())?;
+            validate_filename(file.name())?;
 
             let out_path = path_buf.join(file.mangled_name());
 
+            let map_create_dir_error = |e: std::io::Error| {
+                let message = format!(
+                    "Failed to create directory for {}: {}",
+                    out_path.to_string_lossy(),
+                    e
+                );
+                warn!("{}", message);
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "CREATE_DIR_FAILED".to_string(),
+                    message,
+                )
+            };
+
             if file.is_dir() {
-                std::fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
+                std::fs::create_dir_all(&out_path).map_err(map_create_dir_error)?;
             } else {
                 if let Some(parent) = out_path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    std::fs::create_dir_all(parent).map_err(map_create_dir_error)?;
                 }
 
-                let mut out_file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
+                let mut out_file = std::fs::File::create(&out_path).map_err(|e| {
+                    let message = format!(
+                        "Failed to create file {}: {}",
+                        out_path.to_string_lossy(),
+                        e
+                    );
+                    warn!("{}", message);
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "CREATE_FILE_FAILED".to_string(),
+                        message,
+                    )
+                })?;
 
-                std::io::copy(&mut file, &mut out_file).map_err(|e| e.to_string())?;
+                std::io::copy(&mut file, &mut out_file).map_err(|e| {
+                    warn!("Failed to write file {}: {}", out_path.to_string_lossy(), e);
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "WRITE_FILE_FAILED".to_string(),
+                        format!("Failed to write file {}: {}", out_path.to_string_lossy(), e),
+                    )
+                })?;
             }
         }
         Ok(())
@@ -319,14 +369,6 @@ pub(crate) async fn unzip_bytes_to_path(
             format!("Blocking task failed: {}", e),
         )
     })?
-    .map_err(|e| {
-        warn!("Failed to unzip file: {}", e);
-        AijError::FileSystem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "UNZIP_FAILED".to_string(),
-            format!("Failed to unzip file: {}", e),
-        )
-    })
 }
 
 pub(crate) async fn remove_dir_all(path: impl AsRef<Path>) -> Result<()> {
@@ -394,33 +436,32 @@ pub(crate) async fn delete_file(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn create_zip_file(
-    paths: &[PathBuf],
-    output_path: impl AsRef<Path>,
-) -> Result<()> {
-    let output_path_buf = output_path.as_ref().to_path_buf();
-    let paths = paths.to_vec();
-    tokio::task::spawn_blocking(move || -> std::result::Result<(), String> {
-        let file = std::fs::File::create(&output_path_buf).map_err(|e| e.to_string())?;
-        let mut zip = ZipWriter::new(file);
+pub(crate) async fn create_zip_stream(
+    paths: Vec<PathBuf>,
+) -> Result<BoxStream<'static, std::io::Result<Bytes>>> {
+    let zip_data = tokio::task::spawn_blocking(move || -> std::result::Result<Vec<u8>, String> {
+        let mut buffer = Vec::new();
+        {
+            let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
 
-        let options =
-            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-        for path in paths {
-            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                zip.start_file(file_name, options)
-                    .map_err(|e| e.to_string())?;
+            for path in paths {
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    zip.start_file(file_name, options)
+                        .map_err(|e| e.to_string())?;
 
-                let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
-                let mut buffer = Vec::new();
-                f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-                zip.write_all(&buffer).map_err(|e| e.to_string())?;
+                    let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+                    let mut file_buffer = Vec::new();
+                    f.read_to_end(&mut file_buffer).map_err(|e| e.to_string())?;
+                    zip.write_all(&file_buffer).map_err(|e| e.to_string())?;
+                }
             }
-        }
 
-        zip.finish().map_err(|e| e.to_string())?;
-        Ok(())
+            zip.finish().map_err(|e| e.to_string())?;
+        }
+        Ok(buffer)
     })
     .await
     .map_err(|e| {
@@ -432,13 +473,15 @@ pub(crate) async fn create_zip_file(
         )
     })?
     .map_err(|e| {
-        warn!("Failed to create zip file: {}", e);
+        warn!("Failed to create zip data: {}", e);
         AijError::FileSystem(
             StatusCode::INTERNAL_SERVER_ERROR,
             "ZIP_CREATION_FAILED".to_string(),
-            format!("Failed to create zip file: {}", e),
+            format!("Failed to create zip data: {}", e),
         )
-    })
+    })?;
+    let cursor = std::io::Cursor::new(zip_data);
+    Ok(ReaderStream::new(tokio::io::BufReader::new(cursor)).boxed())
 }
 
 pub(crate) async fn get_data_paths_by_id(pid: impl AsRef<str>) -> Result<Vec<PathBuf>> {
