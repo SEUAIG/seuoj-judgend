@@ -5,7 +5,7 @@ use axum::extract::{Multipart, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde_json::json;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub(crate) async fn upload_problem_data(
     Path(pid): Path<String>,
@@ -66,17 +66,28 @@ pub(crate) async fn upload_problem_data(
     {
         match format.as_str() {
             "zip" => {
-                let uuid = uuid::Uuid::new_v4().to_string();
-                let tmp_path = fs::get_path_by_id_name(&pid, format!("tmp_{uuid}/"), false).await?;
-                match fs::unzip_bytes_to_path(file, &tmp_path).await {
+                let problem_dir = fs::get_dir_by_problem_id(&pid, false).await?;
+                let tmp_dir = tempfile::tempdir_in(problem_dir).map_err(|e| {
+                    warn!("Failed to create temporary directory: {}", e);
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "TEMP_DIR_CREATION_ERROR".to_string(),
+                        format!("Failed to create temporary directory: {}", e),
+                    )
+                })?;
+                info!(
+                    "Created temporary directory to unzip at {:?}",
+                    tmp_dir.path()
+                );
+                match fs::unzip_bytes_to_path(file, &tmp_dir).await {
                     Ok(_) => {
                         let data_path = fs::get_path_by_id_name(&pid, "data/", false).await?;
                         fs::remove_dir_all(&data_path).await?;
-                        fs::rename(tmp_path, data_path).await?;
+                        fs::rename(tmp_dir, data_path).await?;
                     }
                     Err(e) => {
                         error!("Failed to unzip file for problem id: {}", &pid);
-                        fs::remove_dir_all(&tmp_path).await?;
+                        tmp_dir.close().ok();
                         return Err(e);
                     }
                 }

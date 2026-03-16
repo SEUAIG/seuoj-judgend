@@ -1,13 +1,22 @@
 //! File system operations for reading and writing problem and submission data.
+
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::schema::ProblemMetadata;
 use axum::http::StatusCode;
+use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
+use std::io::Read;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use tokio::io::AsyncReadExt;
 use tokio::sync::OnceCell;
+use tokio_util::bytes::Bytes;
 use tokio_util::io::ReaderStream;
 use tracing::warn;
+use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 static INSTANCE: OnceCell<FileSystem> = OnceCell::const_new();
 
@@ -171,7 +180,7 @@ pub(crate) async fn get_text_by_path(
 
 pub(crate) async fn get_stream_by_path(
     path: impl AsRef<Path>,
-) -> Result<ReaderStream<tokio::fs::File>> {
+) -> Result<BoxStream<'static, std::io::Result<Bytes>>> {
     let file = tokio::fs::File::open(path.as_ref()).await.map_err(|e| {
         warn!(
             "Failed to open file {}: {}",
@@ -188,7 +197,7 @@ pub(crate) async fn get_stream_by_path(
             ),
         )
     })?;
-    Ok(ReaderStream::new(file))
+    Ok(ReaderStream::new(file).boxed())
 }
 
 pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<()> {
@@ -253,15 +262,14 @@ pub(crate) async fn assert_problem_exists(pid: impl AsRef<str>) -> Result<()> {
 
 pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let filename = filename.as_ref();
-    let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*(\.[a-zA-Z0-9_-]+)*$")
-        .map_err(|e| {
-            warn!("Failed to compile regex: {}", e);
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "REGEX_COMPILE_FAILED".to_string(),
-                format!("Failed to compile regex: {}", e),
-            )
-        })?;
+
+    static FILENAME_REGEX: OnceLock<regex::Regex> = OnceLock::new();
+    let regex = FILENAME_REGEX.get_or_init(|| {
+        // SAFE: HARD-CODED REGEX, NO USER INPUT
+        #[allow(clippy::expect_used)]
+        regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$")
+            .expect("Failed to compile filename validation regex")
+    });
     if filename.is_empty() || !regex.is_match(filename) {
         warn!("Invalid filename: {}", filename);
         return Err(AijError::Request(
@@ -280,89 +288,63 @@ pub(crate) async fn unzip_bytes_to_path(
     let path_buf = path.as_ref().to_path_buf();
     let bytes_vec = bytes.as_ref().to_vec();
 
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> Result<()> {
         let reader = std::io::Cursor::new(bytes_vec);
         let mut zip = zip::ZipArchive::new(reader).map_err(|e| {
-            warn!("Failed to read zip file: {}", e);
-            AijError::FileSystem(
-                StatusCode::BAD_REQUEST,
-                "INVALID_ZIP_FILE".to_string(),
-                format!("Failed to read zip file: {}", e),
-            )
-        })?;
-
-        let regex = regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$").map_err(|e| {
-            warn!("Failed to compile regex: {}", e);
+            warn!("Failed to read zip archive: {}", e);
             AijError::FileSystem(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "REGEX_COMPILE_FAILED".to_string(),
-                format!("Failed to compile regex: {}", e),
+                "READ_ZIP_FAILED".to_string(),
+                format!("Failed to read zip archive: {}", e),
             )
         })?;
 
         for i in 0..zip.len() {
             let mut file = zip.by_index(i).map_err(|e| {
-                warn!("Failed to read zip entry: {}", e);
+                warn!("Failed to access file in zip archive: {}", e);
                 AijError::FileSystem(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "ZIP_READ_ERROR".to_string(),
-                    format!("Failed to read zip entry: {}", e),
+                    "ACCESS_ZIP_FILE_FAILED".to_string(),
+                    format!("Failed to access file in zip archive: {}", e),
                 )
             })?;
 
-            if !regex.is_match(file.name()) {
-                warn!("Invalid zip entry name: {}", file.name());
-                return Err(AijError::Request(
-                    StatusCode::BAD_REQUEST,
-                    "INVALID_ZIP_ENTRY_NAME".to_string(),
-                    format!("Invalid zip entry name: {}", file.name()),
-                ));
-            }
+            validate_filename(file.name())?;
 
             let out_path = path_buf.join(file.mangled_name());
 
+            let map_create_dir_error = |e: std::io::Error| {
+                let message = format!(
+                    "Failed to create directory for {}: {}",
+                    out_path.to_string_lossy(),
+                    e
+                );
+                warn!("{}", message);
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "CREATE_DIR_FAILED".to_string(),
+                    message,
+                )
+            };
+
             if file.is_dir() {
-                std::fs::create_dir_all(&out_path).map_err(|e| {
-                    warn!(
-                        "Failed to create directory {}: {}",
-                        out_path.to_string_lossy(),
-                        e
-                    );
-                    AijError::FileSystem(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "DIR_CREATE_FAILED".to_string(),
-                        format!(
-                            "Failed to create directory {}: {}",
-                            out_path.to_string_lossy(),
-                            e
-                        ),
-                    )
-                })?;
+                std::fs::create_dir_all(&out_path).map_err(map_create_dir_error)?;
             } else {
                 if let Some(parent) = out_path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| {
-                        AijError::FileSystem(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "DIR_CREATE_FAILED".to_string(),
-                            format!("Failed to create parent directory: {}", e),
-                        )
-                    })?;
+                    std::fs::create_dir_all(parent).map_err(map_create_dir_error)?;
                 }
 
                 let mut out_file = std::fs::File::create(&out_path).map_err(|e| {
-                    warn!(
+                    let message = format!(
                         "Failed to create file {}: {}",
                         out_path.to_string_lossy(),
                         e
                     );
+                    warn!("{}", message);
                     AijError::FileSystem(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        "FILE_CREATE_FAILED".to_string(),
-                        format!(
-                            "Failed to create file {}: {}",
-                            out_path.to_string_lossy(),
-                            e
-                        ),
+                        "CREATE_FILE_FAILED".to_string(),
+                        message,
                     )
                 })?;
 
@@ -370,7 +352,7 @@ pub(crate) async fn unzip_bytes_to_path(
                     warn!("Failed to write file {}: {}", out_path.to_string_lossy(), e);
                     AijError::FileSystem(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        "FILE_WRITE_FAILED".to_string(),
+                        "WRITE_FILE_FAILED".to_string(),
                         format!("Failed to write file {}: {}", out_path.to_string_lossy(), e),
                     )
                 })?;
@@ -430,4 +412,103 @@ pub(crate) async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Resu
                 message,
             )
         })
+}
+
+pub(crate) async fn delete_file(path: impl AsRef<Path>) -> Result<()> {
+    if path.as_ref().exists() {
+        tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {
+            warn!(
+                "Failed to delete file {}: {}",
+                path.as_ref().to_string_lossy(),
+                e
+            );
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DELETE_FILE_FAILED".to_string(),
+                format!(
+                    "Failed to delete file {}: {}",
+                    path.as_ref().to_string_lossy(),
+                    e
+                ),
+            )
+        })?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn create_zip_stream(
+    paths: Vec<PathBuf>,
+) -> Result<BoxStream<'static, std::io::Result<Bytes>>> {
+    let zip_data = tokio::task::spawn_blocking(move || -> std::result::Result<Vec<u8>, String> {
+        let mut buffer = Vec::new();
+        {
+            let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+            for path in paths {
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    zip.start_file(file_name, options)
+                        .map_err(|e| e.to_string())?;
+
+                    let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+                    let mut file_buffer = Vec::new();
+                    f.read_to_end(&mut file_buffer).map_err(|e| e.to_string())?;
+                    zip.write_all(&file_buffer).map_err(|e| e.to_string())?;
+                }
+            }
+
+            zip.finish().map_err(|e| e.to_string())?;
+        }
+        Ok(buffer)
+    })
+    .await
+    .map_err(|e| {
+        warn!("Failed to join blocking task: {}", e);
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "TASK_JOIN_FAILED".to_string(),
+            format!("Blocking task failed: {}", e),
+        )
+    })?
+    .map_err(|e| {
+        warn!("Failed to create zip data: {}", e);
+        AijError::FileSystem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ZIP_CREATION_FAILED".to_string(),
+            format!("Failed to create zip data: {}", e),
+        )
+    })?;
+    let cursor = std::io::Cursor::new(zip_data);
+    Ok(ReaderStream::new(tokio::io::BufReader::new(cursor)).boxed())
+}
+
+pub(crate) async fn get_data_paths_by_id(pid: impl AsRef<str>) -> Result<Vec<PathBuf>> {
+    let data_dir = get_dir_by_problem_id(pid, false).await?.join("data");
+    let mut data_files = Vec::new();
+    if data_dir.exists() {
+        let mut entries = tokio::fs::read_dir(data_dir).await.map_err(|e| {
+            warn!("Failed to read data directory: {}", e);
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "READ_DATA_DIR_FAILED".to_string(),
+                format!("Failed to read data directory: {}", e),
+            )
+        })?;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            warn!("Failed to read data directory: {}", e);
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "READ_DATA_DIR_FAILED".to_string(),
+                format!("Failed to read data directory: {}", e),
+            )
+        })? {
+            let path = entry.path();
+            if path.is_file() {
+                data_files.push(path);
+            }
+        }
+    }
+    Ok(data_files)
 }

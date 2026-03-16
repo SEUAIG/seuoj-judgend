@@ -94,11 +94,19 @@ pub(crate) async fn judge_problem_by_id(
                         "status": "CompileError",
                         "errorDetail": s,
                     }),
-                    JudgeResult::MaybeError(res_vec, subtasks) => json!({
-                        "status": "Success",
-                        "resultDetail": res_vec,
-                        "subtasks": subtasks,
-                    }),
+                    JudgeResult::MaybeError(res_vec, subtasks) => {
+                        let score: i32 = if subtasks.is_empty() {
+                            res_vec.iter().map(|r| r.score).sum()
+                        } else {
+                            subtasks.iter().map(|s| s.score).sum()
+                        };
+                        json!({
+                            "status": "Success",
+                            "resultDetail": res_vec,
+                            "subtasks": subtasks,
+                            "score": score,
+                        })
+                    }
                 }
             }
             Err(e) => json!({
