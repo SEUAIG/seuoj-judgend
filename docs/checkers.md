@@ -4,11 +4,11 @@ SEU AIJ Judge-Endpoint 支持三种类型的检查器：标准检查器、特殊
 
 ## 检查器类型概述
 
-| 检查器类型 | 适用题目类型 | 检查方式 | 输入文件 | 输出文件 | 答案文件 |
-|-----------|-------------|----------|----------|----------|----------|
-| 标准检查器 | 标准题 | 逐行比较输出 | 不需要 | 用户输出 | 期望答案 |
+| 检查器类型 | 适用题目类型 | 检查方式   | 输入文件 | 输出文件 | 答案文件 |
+|-------|--------|--------|------|------|------|
+| 标准检查器 | 标准题    | 逐行比较输出 | 不需要  | 用户输出 | 期望答案 |
 | 特殊检查器 | 特殊检查器题 | 外部程序检查 | 测试输入 | 用户输出 | 期望答案 |
-| 交互检查器 | 交互题 | 交互器程序 | 测试输入 | 交互输出 | 不需要 |
+| 交互检查器 | 交互题    | 交互器程序  | 测试输入 | 交互输出 | 不需要  |
 
 ## 标准检查器
 
@@ -71,6 +71,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ### 示例
 
 #### 示例 1: 完全匹配
+
 ```
 输出: "Hello\nWorld\n"
 答案: "Hello\nWorld"
@@ -78,6 +79,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ```
 
 #### 示例 2: 行尾空白差异
+
 ```
 输出: "Hello   \nWorld\t\n"
 答案: "Hello\nWorld"
@@ -85,6 +87,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ```
 
 #### 示例 3: 末尾空行差异
+
 ```
 输出: "Hello\nWorld\n\n"
 答案: "Hello\nWorld"
@@ -92,6 +95,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ```
 
 #### 示例 4: 内容差异
+
 ```
 输出: "Hello\nWorld"
 答案: "Hello\nEarth"
@@ -99,6 +103,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ```
 
 #### 示例 5: 行数差异
+
 ```
 输出: "Hello\nWorld\nExtra"
 答案: "Hello\nWorld"
@@ -108,6 +113,7 @@ fn standard_checker_str(output: &str, answer: &str) -> CheckerResult {
 ### 配置使用
 
 在 `info.toml` 中配置：
+
 ```toml
 [problem_info]
 problem_type = "Standard"
@@ -123,24 +129,27 @@ checker_type = "Standard"
 ### 接口规范
 
 #### 调用方式
+
 ```bash
 ./checker <input_file> <output_file> <answer_file>
 ```
 
 #### 参数说明
+
 - `<input_file>`: 测试用例输入文件路径
 - `<output_file>`: 用户程序输出文件路径
 - `<answer_file>`: 期望答案文件路径
 
 #### 返回值规范
 
-| 退出码 | 含义 | stderr 要求 |
-|--------|------|-------------|
-| 0 | 答案正确 | 任意内容（通常为空） |
-| 7 | 部分正确 | 格式: `points <分数> <消息>` |
-| 其他 | 答案错误 | 错误描述信息 |
+| 退出码 | 含义   | stderr 要求              |
+|-----|------|------------------------|
+| 0   | 答案正确 | 任意内容（通常为空）             |
+| 7   | 部分正确 | 格式: `points <分数> <消息>` |
+| 其他  | 答案错误 | 错误描述信息                 |
 
 #### 部分分数格式
+
 ```
 points <分数> <消息>
 ```
@@ -241,32 +250,32 @@ if __name__ == "__main__":
 
 ```rust
 let output = tokio::process::Command::new(checker_path)
-    .arg(input_path.as_ref())
-    .arg(output_path.as_ref())
-    .arg(ans_path.as_ref())
-    .output()
-    .await?;
+.arg(input_path.as_ref())
+.arg(output_path.as_ref())
+.arg(ans_path.as_ref())
+.output()
+.await?;
 ```
 
 #### 解析结果
 
 ```rust
 match output.status.code() {
-    Some(0) => Ok(CheckerResult::Accepted),
-    Some(7) => {
-        // 解析部分分数
-        let checker_message = String::from_utf8_lossy(&output.stderr).trim();
-        if let Some(stripped) = checker_message.strip_prefix("points") {
-            let points_str = stripped.trim().split_whitespace().next().unwrap_or("");
-            match points_str.parse::<f64>() {
-                Ok(points) => Ok(CheckerResult::PartiallyAccepted(points, message)),
-                Err(_) => Ok(CheckerResult::WrongAnswer("Invalid points format")),
-            }
-        } else {
-            Ok(CheckerResult::WrongAnswer("Missing points message"))
-        }
-    }
-    _ => Ok(CheckerResult::WrongAnswer(checker_message)),
+Some(0) => Ok(CheckerResult::Accepted),
+Some(7) => {
+// 解析部分分数
+let checker_message = String::from_utf8_lossy( & output.stderr).trim();
+if let Some(stripped) = checker_message.strip_prefix("points") {
+let points_str = stripped.trim().split_whitespace().next().unwrap_or("");
+match points_str.parse::< f64 >() {
+Ok(points) => Ok(CheckerResult::PartiallyAccepted(points, message)),
+Err(_) => Ok(CheckerResult::WrongAnswer("Invalid points format")),
+}
+} else {
+Ok(CheckerResult::WrongAnswer("Missing points message"))
+}
+}
+_ => Ok(CheckerResult::WrongAnswer(checker_message)),
 }
 ```
 
@@ -277,6 +286,7 @@ match output.status.code() {
 检查器源代码（如 `checker.cpp`）放置在题目目录的 `data/` 子目录中。
 
 **编译命令**:
+
 ```bash
 g++ /path/to/checker.cpp -o /path/to/checker \
   -O2 -static -std=c++23 -I/path/to/testlib
@@ -289,6 +299,7 @@ g++ /path/to/checker.cpp -o /path/to/checker \
 预编译的检查器二进制文件（如 `checker`）可以直接使用。
 
 **要求**:
+
 1. Linux 可执行文件
 2. 具有可执行权限（系统会自动设置）
 3. 静态链接或无动态库依赖
@@ -298,6 +309,7 @@ g++ /path/to/checker.cpp -o /path/to/checker \
 推荐使用 testlib 库编写检查器，它提供了丰富的辅助函数。
 
 **testlib 函数**:
+
 - `registerTestlibCmd()`: 注册命令行参数
 - `ouf.readX()`: 读取用户输出
 - `ans.readX()`: 读取答案
@@ -309,6 +321,7 @@ g++ /path/to/checker.cpp -o /path/to/checker \
 ### 配置使用
 
 在 `info.toml` 中配置：
+
 ```toml
 [problem_info]
 problem_type = "Special"
@@ -327,11 +340,13 @@ checker_path = "checker.cpp"  # 或 "checker"（二进制文件）
 ### 接口规范
 
 #### 调用方式
+
 ```bash
 ./interactor <input_file> <output_file>
 ```
 
 #### 参数说明
+
 - `<input_file>`: 测试用例输入文件路径
 - `<output_file>`: 交互器输出文件路径（用于记录交互过程）
 
@@ -344,6 +359,7 @@ checker_path = "checker.cpp"  # 或 "checker"（二进制文件）
 5. 重复直到交互结束
 
 #### 返回值
+
 - `0`: 交互成功，答案正确
 - 其他: 交互失败或答案错误，stderr 作为错误信息
 
@@ -460,12 +476,12 @@ if __name__ == "__main__":
 
 ```rust
 let interactor = match problem_type {
-    ProblemType::Interactive => Some({
-        let path = get_path_by_id_name(&pid, "data/interactor", true).await?;
-        chmod_plus_x(&path).await?;
-        path
-    }),
-    _ => None,
+ProblemType::Interactive => Some({
+let path = get_path_by_id_name( & pid, "data/interactor", true).await ?;
+chmod_plus_x( & path).await ?;
+path
+}),
+_ => None,
 };
 ```
 
@@ -474,24 +490,26 @@ let interactor = match problem_type {
 交互器通过 `judger::run()` 函数的第二个参数传入：
 
 ```rust
-let res = judger::run(&config, interactor).map_err(|e| {
-    AijError::Judge(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "JUDGER_RUN_FAILED".to_string(),
-        format!("Judger run failed: {}", e),
-    )
-})?;
+let res = judger::run( & config, interactor).map_err( | e| {
+AijError::Judge(
+StatusCode::INTERNAL_SERVER_ERROR,
+"JUDGER_RUN_FAILED".to_string(),
+format ! ("Judger run failed: {}", e),
+)
+}) ?;
 ```
 
 #### 结果处理
 
 交互题的结果由交互器决定：
+
 - 交互器正常退出（退出码 0）→ `Accepted`
 - 交互器非正常退出 → `WrongAnswer`，使用交互器的 stderr 作为错误信息
 
 ### 配置使用
 
 在 `info.toml` 中配置：
+
 ```toml
 [problem_info]
 problem_type = "Interactive"
@@ -506,136 +524,24 @@ interactor_path = "interactor.cpp"  # 或 "interactor"（二进制文件）
 ### 最佳实践
 
 #### 1. 错误处理
+
 - 检查所有输入文件的可用性
 - 验证输入数据的格式和范围
 - 提供清晰的错误信息
 
 #### 2. 性能考虑
+
 - 避免内存泄漏
 - 处理大文件时使用流式处理
 - 设置合理的超时限制
 
 #### 3. 可移植性
+
 - 使用标准库函数
 - 避免平台特定代码
-- 静态链接依赖库
 
 #### 4. 安全性
+
 - 验证输入数据，防止缓冲区溢出
 - 避免系统命令注入
 - 限制资源使用
-
-### 测试检查器
-
-#### 手动测试
-```bash
-# 准备测试文件
-echo "input data" > test.in
-echo "expected output" > test.ans
-echo "user output" > test.out
-
-# 测试检查器
-./checker test.in test.out test.ans
-echo "Exit code: $?"
-```
-
-#### 自动化测试
-创建测试脚本验证检查器的各种情况：
-- 完全正确的输出
-- 部分正确的输出
-- 错误的输出
-- 格式错误的输出
-- 空输出
-
-### 调试技巧
-
-#### 日志输出
-检查器可以将调试信息输出到 stderr，系统会将其包含在错误信息中。
-
-#### testlib 调试
-testlib 提供了丰富的调试功能：
-- 自动验证读取的数据类型和范围
-- 格式化错误信息
-- 支持多种数据类型的读取
-
-## 常见问题
-
-### 1. 检查器编译失败
-
-**可能原因**:
-- 缺少 testlib 头文件
-- 编译器版本不兼容
-- 语法错误
-
-**解决方案**:
-- 确保 testlib 目录正确配置
-- 使用支持的编译器版本（g++）
-- 检查源代码语法
-
-### 2. 检查器执行超时
-
-**可能原因**:
-- 检查器逻辑复杂，执行时间过长
-- 死循环或无限递归
-
-**解决方案**:
-- 优化检查器算法
-- 设置合理的超时限制
-- 避免阻塞操作
-
-### 3. 部分分数格式错误
-
-**可能原因**:
-- 退出码不是 7
-- stderr 格式不符合要求
-- 分数不在 0.0-1.0 范围内
-
-**解决方案**:
-- 确保使用正确的退出码
-- 严格按照 `points <分数> <消息>` 格式输出
-- 验证分数范围
-
-### 4. 权限问题
-
-**可能原因**:
-- 检查器文件没有执行权限
-- 文件所有权不正确
-
-**解决方案**:
-- 系统会自动设置执行权限
-- 确保文件在正确的目录中
-
-### 5. 交互器通信失败
-
-**可能原因**:
-- 用户程序没有及时响应
-- 通信协议不匹配
-- 缓冲区未刷新
-
-**解决方案**:
-- 确保及时刷新输出缓冲区
-- 遵循约定的通信协议
-- 添加适当的超时处理
-
-## 扩展自定义检查器
-
-### 添加新的检查器类型
-
-1. 在 `CheckerType` 枚举中添加新变体
-2. 在 `checker` 模块的 `check()` 函数中添加处理逻辑
-3. 创建新的检查器实现模块
-4. 更新类型匹配验证逻辑
-
-### 自定义检查器接口
-
-可以通过修改 `checker` 模块来支持不同的检查器接口，例如：
-- 支持多种部分分数格式
-- 添加检查器配置选项
-- 支持检查器链式调用
-
-### 集成第三方检查器
-
-可以将现有的检查器框架集成到系统中：
-1. 创建适配器封装第三方检查器
-2. 转换接口格式
-3. 处理结果映射

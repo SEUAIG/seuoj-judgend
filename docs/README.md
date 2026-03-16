@@ -2,7 +2,8 @@
 
 ## 概述
 
-SEU AIJ Judge-Endpoint 是一个基于 Rust 的在线评测系统服务端，负责接收代码提交、在沙箱环境中执行评测，并返回评测结果。它通过 HTTP API 提供评测服务，支持多种编程语言和题目类型。
+SEU AIJ Judge-Endpoint 是一个基于 Rust 的在线评测系统服务端，负责接收代码提交、在沙箱环境中执行评测，并返回评测结果。它通过
+HTTP API 提供评测服务，支持多种编程语言和题目类型。
 
 ## 目录
 
@@ -46,19 +47,3 @@ docker run -p 9090:9090 -v $(pwd)/assets:/app/assets aij-judgend
 - **并发控制**: 通过信号量限制并发评测数量
 - **沙箱安全**: 使用 `judger` crate 提供进程隔离和资源限制
 - **详细日志**: 使用 `tracing` 进行结构化日志记录
-
-## 技术栈
-
-- **语言**: Rust 2024 Edition
-- **Web 框架**: Axum
-- **异步运行时**: Tokio
-- **评测沙箱**: judger crate
-- **配置管理**: 环境变量 + TOML/JSON 文件
-- **日志系统**: tracing + tracing-subscriber
-- **序列化**: serde + serde_json + toml
-
-## 相关链接
-
-- [GitHub 仓库](https://github.com/SEUAIG/seuoj-judgend)
-- [judger crate 文档](https://crates.io/crates/judger)
-- [SEU AIJ 项目](https://github.com/SEUAIG)

@@ -34,10 +34,14 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "submissionId": "string",      // 提交 ID
-    "pid": "string",               // 题目 ID
-    "code": "string",              // 源代码
-    "language": "string"           // 编程语言
+  "submissionId": "string",
+  // 提交 ID
+  "pid": "string",
+  // 题目 ID
+  "code": "string",
+  // 源代码
+  "language": "string"
+  // 编程语言
 }
 ```
 
@@ -57,8 +61,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "code": 0,
-    "message": "Success"
+  "code": 0,
+  "message": "Success"
 }
 ```
 
@@ -88,18 +92,18 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "pid": "string",
-    "description": "string",
-    "input": "string",
-    "output": "string",
-    "hint": "string",
-    "example": [
-        {
-            "in": "string",
-            "ans": "string",
-            "description": "string"
-        }
-    ]
+  "pid": "string",
+  "description": "string",
+  "input": "string",
+  "output": "string",
+  "hint": "string",
+  "example": [
+    {
+      "in": "string",
+      "ans": "string",
+      "description": "string"
+    }
+  ]
 }
 ```
 
@@ -117,18 +121,18 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "pid": "string",
-    "description": "string",
-    "input": "string",
-    "output": "string",
-    "hint": "string",
-    "example": [
-        {
-            "in": "string",
-            "ans": "string",
-            "description": "string"
-        }
-    ]
+  "pid": "string",
+  "description": "string",
+  "input": "string",
+  "output": "string",
+  "hint": "string",
+  "example": [
+    {
+      "in": "string",
+      "ans": "string",
+      "description": "string"
+    }
+  ]
 }
 ```
 
@@ -136,8 +140,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "code": 0,
-    "message": "Success"
+  "code": 0,
+  "message": "Success"
 }
 ```
 
@@ -162,13 +166,15 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 **表单字段**:
 
 - `file`: ZIP 文件，包含题目数据文件
+- `format`: 文件格式（可选，默认为 "zip"）
 
 **响应**:
 
+
 ```json
 {
-    "code": 0,
-    "message": "Success"
+  "code": 0,
+  "message": "Success"
 }
 ```
 
@@ -176,6 +182,7 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 - ZIP 文件将解压到题目目录的 `data/` 子目录
 - 文件名必须匹配正则表达式: `^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$`
+- 目前只支持 ZIP 格式
 
 **状态码**:
 
@@ -195,35 +202,37 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "problem_info": {
-        "problem_type": "Standard",
-        "checker_type": "Standard",
-        "time_limit_ms": 1000,
-        "memory_limit_kb": 256000
-    },
-    "testcases": [
-        {
-            "id": 1,
-            "in_path": "1.in",
-            "ans_path": "1.ans",
-            "weight": 1.0,
-            "time_limit_ms": null,
-            "memory_limit_kb": null
-        }
-    ],
-    "subtasks": [
-        {
-            "id": 1,
-            "cases": [1],
-            "pre_subtasks": [],
-            "score": 100,
-            "type": "min"
-        }
-    ],
-    "custom_modules": {
-        "checker_path": "checker.cpp",
-        "interactor_path": null
+  "problem_info": {
+    "problem_type": "Standard",
+    "checker_type": "Standard",
+    "time_limit_ms": 1000,
+    "memory_limit_kb": 256000
+  },
+  "testcases": [
+    {
+      "id": 1,
+      "in_path": "1.in",
+      "ans_path": "1.ans",
+      "weight": 1.0,
+      "time_limit_ms": null,
+      "memory_limit_kb": null
     }
+  ],
+  "subtasks": [
+    {
+      "id": 1,
+      "cases": [
+        1
+      ],
+      "pre_subtasks": [],
+      "score": 100,
+      "type": "min"
+    }
+  ],
+  "custom_modules": {
+    "checker_path": "checker.cpp",
+    "interactor_path": null
+  }
 }
 ```
 
@@ -247,8 +256,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "code": 0,
-    "message": "Success"
+  "code": 0,
+  "message": "Success"
 }
 ```
 
@@ -271,18 +280,18 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "files": [
-        {
-            "name": "problem.json",
-            "is_dir": false,
-            "size": 1234
-        },
-        {
-            "name": "data",
-            "is_dir": true,
-            "size": 0
-        }
-    ]
+  "files": [
+    {
+      "name": "problem.json",
+      "is_dir": false,
+      "size": 1234
+    },
+    {
+      "name": "data",
+      "is_dir": true,
+      "size": 0
+    }
+  ]
 }
 ```
 
@@ -305,14 +314,64 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 - 文件内容（文本文件）或文件流（二进制文件）
 
+### DELETE /judge/problem/{pid}
+
+删除指定题目及其所有关联文件。
+
+**路径参数**:
+
+- `pid`: 题目 ID
+
+**响应**:
+
+```json
+{
+  "code": 0,
+  "message": "Success"
+}
+```
+
 **状态码**:
 
-- `200`: 成功
-- `400`: 无效的文件名
+- `204`: 删除成功
+- `404`: 题目不存在
+- `500`: 服务器内部错误
+
+**说明**:
+
+- 此操作会删除整个题目目录及其所有文件
+- 删除操作不可逆，请谨慎使用
+
+### DELETE /judge/problem/file/{pid}/{filename}
+
+删除题目数据文件。
+
+**路径参数**:
+
+- `pid`: 题目 ID
+- `filename`: 文件名（支持路径）
+
+**响应**:
+
+```json
+{
+  "code": 0,
+  "message": "Success"
+}
+```
+
+**状态码**:
+
+- `204`: 删除成功
+- `400`: 无效的文件名或文件被题目配置引用
 - `404`: 文件不存在
 - `500`: 服务器内部错误
 
-## 评测结果上报
+**说明**:
+
+- 只能删除 `data/` 目录下的文件
+- 如果文件被题目配置（如测试用例或检查器配置）引用，将拒绝删除
+- 删除操作不可逆，请谨慎使用
 
 评测完成后，服务会通过以下接口将结果上报到后端：
 
@@ -325,29 +384,31 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "status": "Success",
-    "resultDetail": [
-        {
-            "id": 1,
-            "time": 10,
-            "mem": 1024,
-            "sys": "Accepted",
-            "in": "1 2",
-            "ans": "3",
-            "out": "3",
-            "type": "Accepted",
-            "score": 100
-        }
-    ],
-    "subtasks": [
-        {
-            "id": 1,
-            "cases": [1],
-            "pre_subtasks": [],
-            "score": 100,
-            "type": "min"
-        }
-    ]
+  "status": "Success",
+  "resultDetail": [
+    {
+      "id": 1,
+      "time": 10,
+      "mem": 1024,
+      "sys": "Accepted",
+      "in": "1 2",
+      "ans": "3",
+      "out": "3",
+      "type": "Accepted",
+      "score": 100
+    }
+  ],
+  "subtasks": [
+    {
+      "id": 1,
+      "cases": [
+        1
+      ],
+      "pre_subtasks": [],
+      "score": 100,
+      "type": "min"
+    }
+  ]
 }
 ```
 
@@ -355,8 +416,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "status": "CompileError",
-    "errorDetail": "编译错误信息"
+  "status": "CompileError",
+  "errorDetail": "编译错误信息"
 }
 ```
 
@@ -364,8 +425,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "status": "JudgendError",
-    "errorDetail": "评测错误信息"
+  "status": "JudgendError",
+  "errorDetail": "评测错误信息"
 }
 ```
 
@@ -375,15 +436,24 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "id": 1,                    // 测试用例 ID
-    "time": 10,                 // CPU 时间使用（毫秒）
-    "mem": 1024,                // 内存使用（字节）
-    "sys": "Accepted",          // 系统输出信息
-    "in": "1 2",                // 输入内容（截断后）
-    "ans": "3",                 // 答案内容（截断后）
-    "out": "3",                 // 用户输出（截断后）
-    "type": "Accepted",         // 结果类型
-    "score": 100                // 得分（0-100）
+  "id": 1,
+  // 测试用例 ID
+  "time": 10,
+  // CPU 时间使用（毫秒）
+  "mem": 1024,
+  // 内存使用（字节）
+  "sys": "Accepted",
+  // 系统输出信息
+  "in": "1 2",
+  // 输入内容（截断后）
+  "ans": "3",
+  // 答案内容（截断后）
+  "out": "3",
+  // 用户输出（截断后）
+  "type": "Accepted",
+  // 结果类型
+  "score": 100
+  // 得分（0-100）
 }
 ```
 
@@ -402,11 +472,19 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "id": 1,                    // 子任务 ID
-    "cases": [1, 2],            // 包含的测试用例 ID 列表
-    "pre_subtasks": [],         // 依赖的子任务 ID 列表
-    "score": 100,               // 实际得分（评测后更新）
-    "type": "min"               // 评分类型："min" 或 "sum"
+  "id": 1,
+  // 子任务 ID
+  "cases": [
+    1,
+    2
+  ],
+  // 包含的测试用例 ID 列表
+  "pre_subtasks": [],
+  // 依赖的子任务 ID 列表
+  "score": 100,
+  // 实际得分（评测后更新）
+  "type": "min"
+  // 评分类型："min" 或 "sum"
 }
 ```
 
@@ -416,8 +494,8 @@ SEU AIJ Judge-Endpoint 提供以下 HTTP API 接口：
 
 ```json
 {
-    "code": -1,
-    "message": "错误类型: 详细错误信息"
+  "code": -1,
+  "message": "错误类型: 详细错误信息"
 }
 ```
 

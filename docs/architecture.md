@@ -32,7 +32,8 @@ src/
     ├── put_problem_config.rs     # 更新题目配置
     ├── get_problem_config.rs     # 获取配置源文件
     ├── get_problem_tree.rs       # 获取题目文件树
-    └── serve_problem_file.rs     # 提供题目文件访问
+    ├── serve_problem_by_id.rs    # 题目信息服务（包含删除题目功能）
+    └── serve_problem_file.rs     # 题目文件访问（包含删除文件功能）
 ```
 
 ### 评测模块 (`judger/`)
@@ -65,8 +66,14 @@ src/judger/
 1. **读取 `problem.json`**: 从题目目录加载题目元数据
 2. **读取 `info.toml`**: 从题目目录加载题目配置
 3. **解析结构**: 使用 serde 将 JSON/TOML 解析为 Rust 结构体
-4. **验证配置**: 检查配置的完整性和有效性
-5. **转换为 judger 配置**: 将题目配置转换为 judger crate 的配置格式
+   4**转换为 judger 配置**: 将题目配置转换为 judger crate 的配置格式
+
+### 删除操作处理流程
+
+1. **验证权限**: 检查题目是否存在
+2. **依赖检查**: 对于文件删除，检查是否被题目配置引用
+3. **安全删除**: 执行删除操作，确保数据完整性
+4. **日志记录**: 记录删除操作的详细信息
 
 ## 核心数据结构
 
@@ -103,7 +110,7 @@ struct ProblemMetadata {
 }
 
 struct ProblemExample {
-    in: String,
+    r#in: String,
     ans: String,
     description: String,
 }
@@ -170,50 +177,19 @@ struct SubtaskConfig {
 }
 ```
 
-## 并发与安全
-
-### 并发控制
-
-- **信号量**: 使用 `tokio::sync::Semaphore` 限制最大并发评测数
-- **异步处理**: 评测请求在独立异步任务中处理，不阻塞主线程
-- **线程安全**: 配置使用 `OnceLock` 和 `RwLock` 保证线程安全
-
-### 安全措施
-
-- **沙箱隔离**: 使用 `judger` crate 提供进程隔离和资源限制
-- **文件权限**: 对可执行文件设置适当的执行权限
-- **输入验证**: 验证文件名、路径等输入参数
-- **资源限制**: 限制时间、内存、输出大小等资源使用
-
 ## 依赖关系
 
 主要依赖项：
 
-- `axum`: Web 框架
+- `axum`: Web 框架（包含 multipart 支持）
 - `tokio`: 异步运行时
 - `judger`: 沙箱评测库
 - `tracing`: 结构化日志
 - `serde`: 序列化/反序列化
 - `toml`: TOML 配置文件解析
 - `reqwest`: HTTP 客户端（用于与后端通信）
-
-## 扩展性
-
-### 添加新编程语言
-
-要添加新的编程语言支持，需要：
-
-1. 在 `SupportedLanguages` 枚举中添加变体
-2. 在 `judge` 函数中添加对应的编译/执行逻辑
-3. 更新 `AIJ_TOOLCHAINS` 环境变量包含必要的二进制工具
-4. 在 `judger` crate 中添加对应的 seccomp 规则（如果需要）
-
-### 添加新检查器类型
-
-系统支持三种检查器类型：
-
-- `Standard`: 标准检查器（逐行比较输出）
-- `Special`: 特殊检查器（自定义检查器程序）
-- `Interactor`: 交互检查器（交互题专用）
-
-可以通过扩展 `checker` 模块添加新的检查器类型。
+- `zip`: ZIP 文件处理
+- `tempfile`: 临时文件管理
+- `tokio-util`: 异步工具函数
+- `which`: 二进制工具路径查找
+- `regex`: 正则表达式处理
