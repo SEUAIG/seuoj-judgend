@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::fs;
 use crate::fs::check_problem_exists;
-use crate::schema::{ProblemExample, ProblemMetadata};
+use crate::schema::{ProblemConfig, ProblemExample, ProblemMetadata};
 use crate::server::AppJson;
 use axum::Json;
 use axum::http::StatusCode;
@@ -83,6 +83,9 @@ pub(crate) async fn edit_problem_by_id(
                 format!("Validation failed for new problem: {}", e),
             )
         })?;
+        info!("Creating config file for id: {}", problem_id);
+        let problem_config = ProblemConfig::default();
+        problem_config.save(&problem_id).await?;
     }
 
     // Handle problem metadata (problem.json)

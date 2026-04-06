@@ -14,6 +14,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, patch, post, put};
 use tokio::sync::OnceCell;
+use tower_http::trace::TraceLayer;
 
 pub mod config;
 pub mod error;
@@ -44,6 +45,7 @@ pub fn app() -> Router {
             delete(delete_problem_file),
         )
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
+        .layer(TraceLayer::new_for_http())
 }
 
 /// initialize the application (configuration, logger, etc.)

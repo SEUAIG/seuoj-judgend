@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::{Once, OnceLock};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
+use tracing_subscriber::Layer;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Initialize the logger with daily rolling file appender and console output.
@@ -14,13 +15,21 @@ pub fn init_logger(log_dir: impl AsRef<Path>) {
 
         let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-        let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        let file_layer = fmt::layer()
+            .with_ansi(false)
+            .with_writer(non_blocking)
+            .with_filter(EnvFilter::new("trace"));
+
+        let stdout_layer = fmt::layer()
+            .pretty()
+            .with_writer(std::io::stdout)
+            .with_filter(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+            );
 
         tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt::layer().with_writer(std::io::stdout).pretty())
-            .with(fmt::layer().with_ansi(false).with_writer(non_blocking))
+            .with(stdout_layer)
+            .with(file_layer)
             .init();
 
         #[allow(clippy::expect_used)]
