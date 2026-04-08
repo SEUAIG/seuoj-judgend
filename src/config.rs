@@ -121,7 +121,6 @@ impl AijConfig {
                 .add_source(config::Environment::with_prefix("AIJ"))
                 .build()
                 .expect("Failed to build configuration from environment variables");
-            println!("settings: {:#?}", settings);
             let config: AijConfig = settings
                 .try_deserialize()
                 .expect("Failed to deserialize configuration from environment variables");
