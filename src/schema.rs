@@ -126,7 +126,7 @@ impl ProblemConfig {
 }
 
 /// Information about a problem
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ProblemInfo {
     /// type of the problem
     pub(crate) problem_type: ProblemType,
@@ -146,6 +146,17 @@ fn default_time_limit() -> i32 {
 
 fn default_memory_limit() -> i64 {
     256 * 1024
+}
+
+impl Default for ProblemInfo {
+    fn default() -> Self {
+        Self {
+            problem_type: ProblemType::default(),
+            checker_type: CheckerType::default(),
+            time_limit_ms: default_time_limit(),
+            memory_limit_kb: default_memory_limit(),
+        }
+    }
 }
 
 impl ProblemInfo {
