@@ -4,7 +4,6 @@ use crate::error::{AijError, Result};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{RwLock, RwLockWriteGuard};
@@ -14,132 +13,120 @@ static CONFIG: OnceLock<AijConfig> = OnceLock::new();
 
 /// Configuration for the AIJ server
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct AijConfig {
     /// Address the server will listen on
+    #[serde(default = "default_listen_addr")]
     pub listen_addr: String,
     /// Port the server will listen on
+    #[serde(default = "default_listen_port")]
     pub listen_port: u16,
     /// Maximum number of concurrent requests
+    #[serde(default = "default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
     /// Path of the problems directory
+    #[serde(default = "default_problems_dir")]
     pub problems_dir: PathBuf,
     /// Path of the log directory
+    #[serde(default = "default_log_dir")]
     pub log_dir: PathBuf,
     /// Path of testlib directory
+    #[serde(default = "default_testlib_dir")]
     pub testlib_dir: PathBuf,
     /// Host of the backend server
+    #[serde(default = "default_backend_host")]
     pub backend_host: String,
     /// Port of the backend server
+    #[serde(default = "default_backend_port")]
     pub backend_port: u16,
     /// Prefix for backend API endpoints
+    #[serde(default = "default_backend_prefix")]
     pub backend_prefix: String,
     /// Save submission files
+    #[serde(default = "default_save_submissions")]
     pub save_submissions: bool,
     /// Truncate length of long outputs
+    #[serde(default = "default_output_truncate_length")]
     pub output_truncate_length: usize,
     /// List of available toolchains
+    #[serde(default = "default_toolchains")]
     pub toolchains: Vec<String>,
     /// Binary path map for toolchains
-    #[serde(skip)]
+    #[serde(skip, default)]
     binary_path_map: Arc<RwLock<HashMap<String, PathBuf>>>,
 }
 
-impl Default for AijConfig {
-    fn default() -> Self {
-        Self {
-            listen_addr: "0.0.0.0".into(),
-            listen_port: 9090,
-            max_concurrent_requests: 6,
-            problems_dir: "./assets/problems/".into(),
-            log_dir: "./assets/logs/".into(),
-            testlib_dir: "./assets/testlib/".into(),
-            backend_host: "127.0.0.1".into(),
-            backend_port: 8080,
-            backend_prefix: "".into(),
-            save_submissions: false,
-            output_truncate_length: 200,
-            toolchains: vec![
-                "gcc".into(),
-                "g++".into(),
-                "go".into(),
-                "java".into(),
-                "javac".into(),
-                "python3".into(),
-                "node".into(),
-            ],
-            binary_path_map: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
+fn default_listen_addr() -> String {
+    "0.0.0.0".into()
+}
+
+fn default_listen_port() -> u16 {
+    9090
+}
+
+fn default_max_concurrent_requests() -> usize {
+    6
+}
+
+fn default_problems_dir() -> PathBuf {
+    "./assets/problems/".into()
+}
+
+fn default_log_dir() -> PathBuf {
+    "./assets/logs/".into()
+}
+
+fn default_testlib_dir() -> PathBuf {
+    "./assets/testlib/".into()
+}
+
+fn default_backend_host() -> String {
+    "127.0.0.1".into()
+}
+
+fn default_backend_port() -> u16 {
+    8080
+}
+
+fn default_backend_prefix() -> String {
+    "".into()
+}
+
+fn default_save_submissions() -> bool {
+    false
+}
+
+fn default_output_truncate_length() -> usize {
+    200
+}
+
+fn default_toolchains() -> Vec<String> {
+    vec![
+        "gcc".into(),
+        "g++".into(),
+        "go".into(),
+        "java".into(),
+        "javac".into(),
+        "python3".into(),
+        "node".into(),
+    ]
 }
 
 impl AijConfig {
     /// get global config
+    #[allow(clippy::expect_used)]
     pub fn get() -> &'static AijConfig {
-        CONFIG.get_or_init(|| Self::default().update_from_env())
-    }
-
-    fn update_from_env(mut self) -> Self {
-        if let Ok(val) = env::var("AIJ_LISTEN_ADDR") {
-            self.listen_addr = val;
-        }
-        if let Some(val) = env::var("AIJ_LISTEN_PORT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
-            self.listen_port = val;
-        }
-        if let Some(val) = env::var("AIJ_MAX_CONCURRENT_REQUESTS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
-            self.max_concurrent_requests = val;
-        }
-        if let Ok(val) = env::var("AIJ_PROBLEMS_DIR") {
-            self.problems_dir = PathBuf::from(val);
-        }
-        if let Ok(val) = env::var("AIJ_LOG_DIR") {
-            self.log_dir = PathBuf::from(val);
-        }
-        if let Ok(val) = env::var("AIJ_TESTLIB_DIR") {
-            self.testlib_dir = PathBuf::from(val);
-        }
-        if let Ok(val) = env::var("AIJ_BACKEND_HOST") {
-            self.backend_host = val;
-        }
-        if let Some(val) = env::var("AIJ_BACKEND_PORT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
-            self.backend_port = val;
-        }
-        if let Ok(val) = env::var("AIJ_BACKEND_PREFIX") {
-            self.backend_prefix = val;
-        }
-        if let Some(val) = env::var("AIJ_SAVE_SUBMISSIONS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
-            self.save_submissions = val;
-        }
-        if let Some(val) = env::var("AIJ_OUTPUT_TRUNCATE_LENGTH")
-            .ok()
-            .and_then(|s| s.parse().ok())
-        {
-            self.output_truncate_length = val;
-        }
-        if let Ok(val) = env::var("AIJ_TOOLCHAINS") {
-            self.toolchains = val
-                .split(',')
-                .filter_map(|s| {
-                    if s.trim().is_empty() {
-                        None
-                    } else {
-                        Some(s.trim().to_string())
-                    }
-                })
-                .collect();
-        }
-        self
+        CONFIG.get_or_init(|| {
+            let settings = config::Config::builder()
+                .add_source(config::Environment::with_prefix("AIJ"))
+                .build()
+                .expect("Failed to build configuration from environment variables");
+            println!("settings: {:#?}", settings);
+            let config: AijConfig = settings
+                .try_deserialize()
+                .expect("Failed to deserialize configuration from environment variables");
+            config
+        })
     }
 
     pub(crate) fn get_backend_base_addr() -> Result<String> {
