@@ -118,7 +118,12 @@ impl AijConfig {
     pub fn get() -> &'static AijConfig {
         CONFIG.get_or_init(|| {
             let settings = config::Config::builder()
-                .add_source(config::Environment::with_prefix("AIJ"))
+                .add_source(
+                    config::Environment::with_prefix("AIJ")
+                        .try_parsing(true)
+                        .list_separator(",")
+                        .with_list_parse_key("toolchains"),
+                )
                 .build()
                 .expect("Failed to build configuration from environment variables");
             let config: AijConfig = settings
@@ -201,6 +206,44 @@ impl AijConfig {
                     path.to_string_lossy()
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    /// Verify that a comma-separated AIJ_TOOLCHAINS value is correctly parsed
+    /// into a Vec<String>, preserving backward compatibility with the documented
+    /// env var format (e.g. `AIJ_TOOLCHAINS=gcc,g++,python3`).
+    ///
+    /// The `#[serial]` attribute ensures this test does not race with other
+    /// tests that mutate environment variables.
+    #[test]
+    #[serial]
+    fn test_toolchains_from_comma_separated_env() {
+        // SAFETY: mutation is safe here because `#[serial]` ensures no other
+        // test in this process is running concurrently.
+        unsafe {
+            std::env::set_var("AIJ_TOOLCHAINS", "gcc,g++,python3");
+        }
+
+        let settings = config::Config::builder()
+            .add_source(
+                config::Environment::with_prefix("AIJ")
+                    .try_parsing(true)
+                    .list_separator(",")
+                    .with_list_parse_key("toolchains"),
+            )
+            .build()
+            .unwrap();
+
+        let toolchains: Vec<String> = settings.get("toolchains").unwrap();
+        assert_eq!(toolchains, vec!["gcc", "g++", "python3"]);
+
+        unsafe {
+            std::env::remove_var("AIJ_TOOLCHAINS");
         }
     }
 }
