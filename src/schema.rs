@@ -58,7 +58,7 @@ impl ProblemMetadata {
                 format!("Failed to serialize problem info: {}", e),
             )
         })?;
-        let meta_path = fs::get_path_by_id_name(pid.as_ref(), "problem.json", false).await?;
+        let meta_path = fs::get_path_by_pid_name(pid.as_ref(), "problem.json", false).await?;
         fs::write_to_file(&meta_path, &problem_json).await
     }
 }
@@ -120,7 +120,7 @@ impl ProblemConfig {
                 format!("Failed to serialize problem config: {}", e),
             )
         })?;
-        let config_path = fs::get_path_by_id_name(pid.as_ref(), "info.toml", false).await?;
+        let config_path = fs::get_path_by_pid_name(pid.as_ref(), "info.toml", false).await?;
         fs::write_to_file(&config_path, &config_toml).await
     }
 }

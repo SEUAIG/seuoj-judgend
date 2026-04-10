@@ -25,7 +25,7 @@ pub(crate) async fn put_problem_config(
                 {
                     fs::validate_filename(interactor_path)?;
                     let interactor_full_path =
-                        fs::get_path_by_id_name(&pid, format!("data/{}", interactor_path), true)
+                        fs::get_path_by_pid_name(&pid, format!("data/{}", interactor_path), true)
                             .await?;
                     if interactor_path.contains(".cpp") {
                         crate::judger::compile(interactor_full_path).await?;
@@ -52,7 +52,7 @@ pub(crate) async fn put_problem_config(
                 {
                     fs::validate_filename(checker_path)?;
                     let checker_full_path =
-                        fs::get_path_by_id_name(&pid, format!("data/{}", checker_path), true)
+                        fs::get_path_by_pid_name(&pid, format!("data/{}", checker_path), true)
                             .await?;
                     if checker_path.contains(".cpp") {
                         crate::judger::compile(checker_full_path).await?;
@@ -96,11 +96,11 @@ pub(crate) async fn put_problem_config(
         }
         let in_path = &case.in_path;
         fs::validate_filename(in_path)?;
-        let _ = fs::get_path_by_id_name(&pid, format!("data/{in_path}"), true).await?;
+        let _ = fs::get_path_by_pid_name(&pid, format!("data/{in_path}"), true).await?;
         let ans_path = &case.ans_path;
         if !ans_path.is_empty() {
             fs::validate_filename(ans_path)?;
-            let _ = fs::get_path_by_id_name(&pid, format!("data/{ans_path}"), true).await?;
+            let _ = fs::get_path_by_pid_name(&pid, format!("data/{ans_path}"), true).await?;
         }
     }
     let all_case_ids = existing_id;

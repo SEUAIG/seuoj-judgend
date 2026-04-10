@@ -3,7 +3,7 @@
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
-use crate::fs::{get_dir_by_submission_id, get_path_by_id_name, get_text_by_path};
+use crate::fs::{get_dir_by_submission_id, get_path_by_pid_name, get_text_by_path};
 use crate::schema::{CheckerType, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,7 @@ pub(crate) async fn judge(
     submission_id: String,
 ) -> Result<JudgeResult> {
     let mut problem_config = ProblemConfig::from_pid(&pid).await?;
-    let tmp_dir = get_dir_by_submission_id(&submission_id).await?;
+    let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
     let source_file_extension = match language {
         SupportedLanguages::C => "c",
         SupportedLanguages::Cpp
@@ -361,10 +361,10 @@ async fn judge_single_case(
     tmp_dir: &std::path::Path,
 ) -> Result<JudgeResultItem> {
     let input_path =
-        get_path_by_id_name(&pid, format!("data/{}", case_config.in_path), true).await?;
+        get_path_by_pid_name(&pid, format!("data/{}", case_config.in_path), true).await?;
     let ans_path = match problem_type {
         ProblemType::Standard | ProblemType::Special => {
-            get_path_by_id_name(&pid, format!("data/{}", case_config.ans_path), true).await?
+            get_path_by_pid_name(&pid, format!("data/{}", case_config.ans_path), true).await?
         }
         ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case_config.id)),
     };
@@ -396,7 +396,7 @@ async fn judge_single_case(
     let interactor = match problem_type {
         ProblemType::Standard | ProblemType::Special => None,
         ProblemType::Interactive => Some({
-            let path = get_path_by_id_name(&pid, "data/interactor", true).await?;
+            let path = get_path_by_pid_name(&pid, "data/interactor", true).await?;
             chmod_plus_x(&path).await?;
             path
         }),

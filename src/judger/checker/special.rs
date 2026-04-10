@@ -1,4 +1,4 @@
-use crate::fs::get_path_by_id_name;
+use crate::fs::get_path_by_pid_name;
 use crate::judger::checker::CheckerResult;
 use crate::judger::utils::chmod_plus_x;
 use axum::http::StatusCode;
@@ -13,7 +13,7 @@ pub(crate) async fn special_checker(
 ) -> crate::error::Result<CheckerResult> {
     {
         info!("Using special checker for problem {}", problem_id.as_ref());
-        let checker_path = get_path_by_id_name(problem_id.as_ref(), "data/checker", true).await?;
+        let checker_path = get_path_by_pid_name(problem_id.as_ref(), "data/checker", true).await?;
         chmod_plus_x(&checker_path).await.map_err(|e| {
             let message = format!(
                 "Failed to set execute permission for checker of problem {}: {}",

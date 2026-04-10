@@ -6,20 +6,8 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use tracing::{error, info};
 
-use serde::Serialize;
+use crate::server::utils::FileNode;
 use serde_json::json;
-
-#[derive(Serialize, Debug)]
-#[serde(untagged)]
-pub enum FileNode {
-    Directory {
-        name: String,
-        children: Vec<FileNode>,
-    },
-    File {
-        name: String,
-    },
-}
 
 pub(crate) async fn get_problem_tree(Path(pid): Path<String>) -> Result<impl IntoResponse> {
     info!(
@@ -30,9 +18,28 @@ pub(crate) async fn get_problem_tree(Path(pid): Path<String>) -> Result<impl Int
     fs::assert_problem_exists(&pid).await?;
 
     let problem_path = fs::get_dir_by_problem_id(&pid, false).await?;
-    match build_tree(&problem_path) {
+    get_response_tree(problem_path, pid).await
+}
+
+pub(crate) async fn get_submission_tree(Path(sid): Path<String>) -> Result<impl IntoResponse> {
+    info!(
+        "Received request to get submission tree for submission ID: {}",
+        sid
+    );
+
+    fs::assert_submission_exists(&sid).await?;
+
+    let submission_path = fs::get_dir_by_submission_id(&sid, false).await?;
+    get_response_tree(submission_path, sid).await
+}
+
+async fn get_response_tree(
+    path: impl AsRef<std::path::Path>,
+    id: impl AsRef<str>,
+) -> Result<impl IntoResponse> {
+    match build_tree(path.as_ref()) {
         Some(tree) => {
-            info!("Successfully built file tree for problem ID: {}", pid);
+            info!("Successfully built file tree for ID: {}", id.as_ref());
             Ok(Json(json!({
                 "code": 0,
                 "message": "Success",
@@ -42,7 +49,7 @@ pub(crate) async fn get_problem_tree(Path(pid): Path<String>) -> Result<impl Int
             })))
         }
         None => {
-            let message = format!("Failed to build file tree for problem ID: {}", pid);
+            let message = format!("Failed to build file tree for ID: {}", id.as_ref());
             error!("{}", message);
             Err(AijError::Server(
                 StatusCode::INTERNAL_SERVER_ERROR,

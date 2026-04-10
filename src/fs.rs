@@ -65,26 +65,47 @@ pub(crate) async fn read_file_by_id_name(
     pid: impl AsRef<str>,
     filename: impl AsRef<str>,
 ) -> Result<String> {
-    let file_path = get_path_by_id_name(pid, filename, true).await?;
+    let file_path = get_path_by_pid_name(pid, filename, true).await?;
     get_text_by_path(file_path, None).await
 }
 
-pub(crate) async fn get_path_by_id_name(
+pub(crate) async fn get_path_by_pid_name(
     pid: impl AsRef<str>,
     filename: impl AsRef<str>,
     check: bool,
 ) -> Result<PathBuf> {
     let problem_dir = get_dir_by_problem_id(pid, false).await?;
     let file_path = problem_dir.join(filename.as_ref());
-    if check && !file_path.exists() {
-        warn!("File not found: {}", file_path.to_string_lossy());
-        return Err(AijError::FileSystem(
-            StatusCode::NOT_FOUND,
-            "FILE_NOT_FOUND".to_string(),
-            format!("File does not exist: {}", file_path.to_string_lossy()),
-        ));
+    if check {
+        check_path_exist(&file_path)?;
     }
     Ok(file_path)
+}
+
+pub(crate) async fn get_path_by_sid_name(
+    sid: impl AsRef<str>,
+    filename: impl AsRef<str>,
+    check: bool,
+) -> Result<PathBuf> {
+    let submission_dir = get_dir_by_submission_id(sid, false).await?;
+    let file_path = submission_dir.join(filename.as_ref());
+    if check {
+        check_path_exist(&file_path)?;
+    }
+    Ok(file_path)
+}
+
+fn check_path_exist(path: impl AsRef<Path>) -> Result<()> {
+    if !path.as_ref().exists() {
+        warn!("File not found: {}", path.as_ref().to_string_lossy());
+        Err(AijError::FileSystem(
+            StatusCode::NOT_FOUND,
+            "FILE_NOT_FOUND".to_string(),
+            format!("File does not exist: {}", path.as_ref().to_string_lossy()),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub(crate) async fn get_dir_by_problem_id(pid: impl AsRef<str>, create: bool) -> Result<PathBuf> {
@@ -96,17 +117,20 @@ pub(crate) async fn get_dir_by_problem_id(pid: impl AsRef<str>, create: bool) ->
     Ok(dir_path)
 }
 
-pub(crate) async fn get_dir_by_submission_id(submission_id: impl AsRef<str>) -> Result<PathBuf> {
+pub(crate) async fn get_dir_by_submission_id(
+    sid: impl AsRef<str>,
+    create: bool,
+) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
-    let dir_path = fs.submissions_dir.join(submission_id.as_ref());
-    if !dir_path.exists() {
+    let dir_path = fs.submissions_dir.join(sid.as_ref());
+    if create && !dir_path.exists() {
         create_dir_all(&dir_path).await?;
     }
     Ok(dir_path)
 }
 
 pub(crate) async fn delete_dir_by_submission_id(submission_id: impl AsRef<str>) -> Result<()> {
-    let dir_path = get_dir_by_submission_id(submission_id).await?;
+    let dir_path = get_dir_by_submission_id(submission_id, false).await?;
     if dir_path.exists() {
         tokio::fs::remove_dir_all(&dir_path).await.map_err(|e| {
             let message = format!(
@@ -247,6 +271,11 @@ pub(crate) async fn check_problem_exists(pid: impl AsRef<str>) -> Result<bool> {
     Ok(problem_dir.exists())
 }
 
+pub(crate) async fn check_submission_exists(sid: impl AsRef<str>) -> Result<bool> {
+    let submission_dir = get_dir_by_submission_id(sid, false).await?;
+    Ok(submission_dir.exists())
+}
+
 pub(crate) async fn assert_problem_exists(pid: impl AsRef<str>) -> Result<()> {
     if !check_problem_exists(&pid).await? {
         warn!("Problem not found: {}", pid.as_ref());
@@ -254,6 +283,18 @@ pub(crate) async fn assert_problem_exists(pid: impl AsRef<str>) -> Result<()> {
             StatusCode::NOT_FOUND,
             "PROBLEM_NOT_FOUND".to_string(),
             format!("Problem with ID {} does not exist", pid.as_ref()),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) async fn assert_submission_exists(sid: impl AsRef<str>) -> Result<()> {
+    if !check_submission_exists(&sid).await? {
+        warn!("Submission not found: {}", sid.as_ref());
+        return Err(AijError::FileSystem(
+            StatusCode::NOT_FOUND,
+            "SUBMISSION_NOT_FOUND".to_string(),
+            format!("Submission with ID {} does not exist", sid.as_ref()),
         ));
     }
     Ok(())

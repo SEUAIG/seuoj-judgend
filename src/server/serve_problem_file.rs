@@ -1,10 +1,10 @@
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::schema::{CheckerType, ProblemConfig};
-use axum::body::Body;
+use crate::server::utils::build_response_from_file_content;
 use axum::extract::Path;
-use axum::http::{StatusCode, header};
-use axum::response::{IntoResponse, Response};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
@@ -21,28 +21,12 @@ pub(crate) async fn get_problem_file(
         _ => {
             fs::validate_filename(&filename)?;
             let file_path =
-                fs::get_path_by_id_name(&pid, format!("data/{}", filename), true).await?;
+                fs::get_path_by_pid_name(&pid, format!("data/{}", filename), true).await?;
             fs::get_stream_by_path(file_path).await?
         }
     };
 
-    Response::builder()
-        .header(header::CONTENT_TYPE, "application/octet-stream")
-        .header(
-            header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{filename}\""),
-        )
-        .body(Body::from_stream(file_content))
-        .map_err(|e| {
-            AijError::Server(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "RESPONSE_BUILD_FAILED".to_string(),
-                format!(
-                    "Failed to build response for problem file {} of problem {}: {}",
-                    filename, pid, e
-                ),
-            )
-        })
+    build_response_from_file_content(pid, filename, file_content)
 }
 
 pub(crate) async fn delete_problem_file(
@@ -53,7 +37,7 @@ pub(crate) async fn delete_problem_file(
         filename, pid
     );
     fs::validate_filename(&filename)?;
-    let path = fs::get_path_by_id_name(&pid, format!("data/{}", filename), false).await?;
+    let path = fs::get_path_by_pid_name(&pid, format!("data/{}", filename), false).await?;
     if !path.exists() {
         return Ok(StatusCode::NO_CONTENT);
     }
@@ -122,7 +106,7 @@ pub(crate) async fn delete_problem_file(
             ));
         }
     }
-    let file_path = fs::get_path_by_id_name(&pid, format!("data/{}", filename), true).await?;
+    let file_path = fs::get_path_by_pid_name(&pid, format!("data/{}", filename), true).await?;
     fs::delete_file(&file_path).await?;
     Ok(StatusCode::NO_CONTENT)
 }

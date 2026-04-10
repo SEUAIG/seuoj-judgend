@@ -81,7 +81,7 @@ pub(crate) async fn upload_problem_data(
                 );
                 match fs::unzip_bytes_to_path(file, &tmp_dir).await {
                     Ok(_) => {
-                        let data_path = fs::get_path_by_id_name(&pid, "data/", false).await?;
+                        let data_path = fs::get_path_by_pid_name(&pid, "data/", false).await?;
                         fs::remove_dir_all(&data_path).await?;
                         fs::rename(tmp_dir, data_path).await?;
                     }
