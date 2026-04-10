@@ -6,7 +6,7 @@ mod utils;
 #[tokio::test]
 async fn test_upload_problem_data() {
     let server = get_test_server().await;
-    std::fs::rename("./assets/problems/p01/data", "./test_backup_data_dir")
+    std::fs::rename("./assets/problems/test01/data", "./test_backup_data_dir")
         .expect("Failed to copy test input file");
     std::fs::write("./1.in", b"1 2 3\n").expect("Failed to write test input file");
 
@@ -22,20 +22,20 @@ async fn test_upload_problem_data() {
         .add_part("file", Part::bytes(zip_bytes).file_name("data.zip"))
         .add_part("format", Part::text("zip"));
     let response = server
-        .post("/judge/problem/data/p01")
+        .post("/judge/problem/data/test01")
         .multipart(multi_part)
         .await;
 
     response.assert_status_ok();
 
-    let data_1_in_content = std::fs::read_to_string("./assets/problems/p01/data/1.in")
+    let data_1_in_content = std::fs::read_to_string("./assets/problems/test01/data/1.in")
         .expect("Failed to read test input file after upload");
     assert_eq!(data_1_in_content, "1 2 3\n");
 
     std::fs::remove_file("./1.in").expect("Failed to remove test input file");
     std::fs::remove_file("./data.zip").expect("Failed to remove zip file");
-    std::fs::remove_dir_all("./assets/problems/p01/data")
+    std::fs::remove_dir_all("./assets/problems/test01/data")
         .expect("Failed to remove test data directory");
-    std::fs::rename("./test_backup_data_dir", "./assets/problems/p01/data")
+    std::fs::rename("./test_backup_data_dir", "./assets/problems/test01/data")
         .expect("Failed to restore test data directory");
 }

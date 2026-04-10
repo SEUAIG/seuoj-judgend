@@ -6,7 +6,7 @@ mod utils;
 async fn test_get_problem() {
     let server = get_test_server().await;
 
-    let response = server.get("/judge/problem/p01").await;
+    let response = server.get("/judge/problem/test01").await;
 
     response.assert_status_ok();
     let body = response.text();

@@ -512,7 +512,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_problem_info_from_pid() {
-        let pid = "p01";
+        let pid = "test01";
         let metadata = ProblemMetadata::from_pid(pid).await;
         println!("Metadata for problem {}: {:?}", pid, metadata);
         assert!(metadata.is_ok());
@@ -523,7 +523,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_case_info_from_pid() {
-        let pid = "p01";
+        let pid = "test01";
         let cases = ProblemConfig::from_pid(pid).await;
         println!("Cases for problem {}: {:?}", pid, cases);
         assert!(cases.is_ok());

@@ -6,7 +6,7 @@ mod utils;
 async fn test_get_problem_tree() {
     let server = get_test_server().await;
 
-    let response = server.get("/judge/problem/tree/p01").await;
+    let response = server.get("/judge/problem/tree/test01").await;
 
     response.assert_status_ok();
     let body = response.text();

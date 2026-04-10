@@ -9,7 +9,7 @@ async fn test_edit_problem() {
     let response = server
         .patch("/judge/problem/edit")
         .json(&json!({
-            "pid": "p01",
+            "pid": "test01",
             "description": "Updated problem description",
         }))
         .await;
