@@ -2,16 +2,16 @@ use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
 use crate::fs::delete_dir_by_submission_id;
-use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use crate::judger::{judge, JudgeResult, SupportedLanguages};
 use crate::schema::ProblemConfig;
-use crate::server::{AppJson, get_judge_semaphore};
-use axum::Json;
+use crate::server::{get_judge_semaphore, AppJson};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 #[derive(Deserialize)]
 pub(crate) struct JudgeRequest {
@@ -52,7 +52,7 @@ pub(crate) async fn judge_problem_by_id(
                 payload.language,
                 payload.submission_id.clone(),
             )
-            .await;
+                .await;
             drop(permit);
             res
         } else {
@@ -90,20 +90,20 @@ pub(crate) async fn judge_problem_by_id(
             Ok(result) => {
                 info!("Judging completed: {:?}", result);
                 match result {
-                    JudgeResult::CompileError(s) => json!({
+                    JudgeResult::CompileError { detail } => json!({
                         "status": "CompileError",
-                        "errorDetail": s,
+                        "errorDetail": detail,
                     }),
-                    JudgeResult::MaybeError(res_vec, subtasks) => {
-                        let score: i32 = if subtasks.is_empty() {
-                            res_vec.iter().map(|r| r.score).sum()
+                    JudgeResult::MaybeError { results, subtask_configs } => {
+                        let score: i32 = if subtask_configs.is_empty() {
+                            results.iter().map(|r| r.score).sum()
                         } else {
-                            subtasks.iter().map(|s| s.score).sum()
+                            subtask_configs.iter().map(|s| s.score).sum()
                         };
                         json!({
                             "status": "Success",
-                            "resultDetail": res_vec,
-                            "subtasks": subtasks,
+                            "resultDetail": results,
+                            "subtasks": subtask_configs,
                             "score": score,
                         })
                     }
@@ -114,23 +114,24 @@ pub(crate) async fn judge_problem_by_id(
                 "errorDetail": format!("Judging failed: {}", e),
             }),
         };
+        trace!("Result to report: {}, submission_id={}", json_content, payload.submission_id);
         info!(
             "Reporting result to backend for submission_id={}",
-            &payload.submission_id
+            payload.submission_id
         );
         let client = Client::new();
         match client.put(&server_addr).json(&json_content).send().await {
             Ok(resp) => {
                 info!(
                     "Reported result to backend for submission_id={}: response_status={}",
-                    &payload.submission_id,
+                    payload.submission_id,
                     resp.status()
                 );
             }
             Err(e) => {
                 warn!(
-                    "Failed to report result to backend for submission_id={}: {}",
-                    &payload.submission_id, e
+                    "Failed to report result to backend {} for submission_id={}: {}",
+                    server_addr, payload.submission_id, e
                 );
             }
         }

@@ -90,16 +90,16 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-            .map_err(|e| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "COMPILE_ERROR".to_string(),
-                    format!("Failed to compile source code: {}", e),
-                )
-            })?;
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError(stderr.to_string()));
+                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
@@ -154,7 +154,7 @@ pub(crate) async fn judge(
                 })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError(stderr.to_string()));
+                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
             }
             problem_config.problem_info.memory_limit_kb =
                 match problem_config.problem_info.memory_limit_kb {
@@ -183,7 +183,7 @@ pub(crate) async fn judge(
                 })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError(stderr.to_string()));
+                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
             }
             let mut args = vec![
                 "java".to_string(),
@@ -249,7 +249,7 @@ pub(crate) async fn judge(
                     out_vec.push(JudgeResultItem {
                         id: case_config.id,
                         sys: "Skipped due to previous error in subtask".to_string(),
-                        r#type: "Skipped".to_string(),
+                        r#type: JudgeResultType::Skipped,
                         ..Default::default()
                     });
                     continue;
@@ -263,10 +263,10 @@ pub(crate) async fn judge(
                     args.clone(),
                     &tmp_dir,
                 )
-                .await?;
+                    .await?;
                 scores.push(res.score);
                 out_vec.push(res.clone());
-                if res.r#type != "Accepted" {
+                if res.r#type != JudgeResultType::Accepted {
                     error_map.insert(sub_id, true);
                 }
             }
@@ -329,12 +329,12 @@ pub(crate) async fn judge(
                 args.clone(),
                 &tmp_dir,
             )
-            .await?;
+                .await?;
             res.score = (res.score as f64 * case_config.weight / sum_weight) as i32;
             out_vec.push(res);
         }
     }
-    Ok(JudgeResult::MaybeError(out_vec, subtasks))
+    Ok(JudgeResult::MaybeError { results: out_vec, subtask_configs: subtasks })
 }
 
 async fn judge_single_case(
@@ -414,7 +414,7 @@ async fn judge_single_case(
     let mut score = 0;
     let (sys, r#type) = match res.result {
         judger::ErrorCode::Success => {
-            let mut result = ("Accepted".to_string(), "Accepted");
+            let mut result = ("Accepted".to_string(), JudgeResultType::Accepted);
             if problem_type != ProblemType::Interactive {
                 match checker::check(
                     &pid,
@@ -423,34 +423,34 @@ async fn judge_single_case(
                     &ans_path,
                     checker_type,
                 )
-                .await?
+                    .await?
                 {
                     CheckerResult::Accepted => {}
                     CheckerResult::PartiallyAccepted(score_f, detail) => {
                         let score_i = (score_f * 100.0) as i32;
-                        result = (detail, "PartiallyAccepted");
+                        result = (detail, JudgeResultType::PartiallyAccepted);
                         score = score_i;
                     }
-                    CheckerResult::WrongAnswer(detail) => result = (detail, "WrongAnswer"),
+                    CheckerResult::WrongAnswer(detail) => result = (detail, JudgeResultType::WrongAnswer),
                 }
             }
             result
         }
-        judger::ErrorCode::WrongAnswer(s) => (s, "WrongAnswer"),
+        judger::ErrorCode::WrongAnswer(s) => (s, JudgeResultType::WrongAnswer),
         judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
-            ("Time Limit Exceeded".to_string(), "TimeLimitExceeded")
+            ("Time Limit Exceeded".to_string(), JudgeResultType::TimeLimitExceeded)
         }
         judger::ErrorCode::MemoryLimitExceeded => {
-            ("Memory Limit Exceeded".to_string(), "MemoryLimitExceeded")
+            ("Memory Limit Exceeded".to_string(), JudgeResultType::MemoryLimitExceeded)
         }
-        judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), "RuntimeError"),
+        judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), JudgeResultType::RuntimeError),
         judger::ErrorCode::SystemError => {
             let err_info = format!(
                 "Judger System Error on submission {} test case {}: {:?}",
                 submission_id, case_config.id, res
             );
             warn!("{err_info}");
-            (err_info, "SystemError")
+            (err_info, JudgeResultType::SystemError)
         }
         _ => {
             return Err(AijError::Judge(
@@ -471,9 +471,31 @@ async fn judge_single_case(
         r#in: in_content,
         ans: ans_content,
         out: out_content,
-        r#type: r#type.to_string(),
-        score: if r#type == "Accepted" { 100 } else { score },
+        score: if r#type == JudgeResultType::Accepted { 100 } else { score },
+        r#type,
     })
+}
+
+/// Type of the judging result for a single test case
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub enum JudgeResultType {
+    /// Accepted: the output matches the expected answer
+    #[default]
+    Accepted,
+    /// Skipped: the test case was skipped due to a previous error in the same subtask
+    Skipped,
+    /// Partially Accepted: the output is partially correct, with a score between 0 and 100
+    PartiallyAccepted,
+    /// Wrong Answer: the output does not match the expected answer
+    WrongAnswer,
+    /// Time Limit Exceeded: the program exceeded the time limit for execution
+    TimeLimitExceeded,
+    /// Memory Limit Exceeded: the program exceeded the memory limit for execution
+    MemoryLimitExceeded,
+    /// Runtime Error: the program crashed or encountered a runtime error during execution
+    RuntimeError,
+    /// System Error: an error occurred in the judger system itself, not related to the user's code
+    SystemError,
 }
 
 /// Result of once judging
@@ -494,7 +516,7 @@ pub(crate) struct JudgeResultItem {
     /// output of user code
     pub(crate) out: String,
     /// type of the result
-    pub(crate) r#type: String,
+    pub(crate) r#type: JudgeResultType,
     /// score of the test case
     pub(crate) score: i32,
 }
@@ -502,8 +524,13 @@ pub(crate) struct JudgeResultItem {
 /// Result of the judging process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
-    CompileError(String),
-    MaybeError(Vec<JudgeResultItem>, Vec<SubtaskConfig>),
+    CompileError {
+        detail: String
+    },
+    MaybeError {
+        results: Vec<JudgeResultItem>,
+        subtask_configs: Vec<SubtaskConfig>,
+    },
 }
 
 #[cfg(test)]
