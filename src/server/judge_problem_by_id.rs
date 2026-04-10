@@ -2,16 +2,16 @@ use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
 use crate::fs::delete_dir_by_submission_id;
-use crate::judger::{judge, JudgeResult, SupportedLanguages};
+use crate::judger::{JudgeResult, SupportedLanguages, judge};
 use crate::schema::ProblemConfig;
-use crate::server::{get_judge_semaphore, AppJson};
+use crate::server::{AppJson, get_judge_semaphore};
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Deserialize)]
 pub(crate) struct JudgeRequest {
@@ -52,7 +52,7 @@ pub(crate) async fn judge_problem_by_id(
                 payload.language,
                 payload.submission_id.clone(),
             )
-                .await;
+            .await;
             drop(permit);
             res
         } else {
@@ -94,7 +94,10 @@ pub(crate) async fn judge_problem_by_id(
                         "status": "CompileError",
                         "errorDetail": detail,
                     }),
-                    JudgeResult::MaybeError { results, subtask_configs } => {
+                    JudgeResult::MaybeError {
+                        results,
+                        subtask_configs,
+                    } => {
                         let score: i32 = if subtask_configs.is_empty() {
                             results.iter().map(|r| r.score).sum()
                         } else {
@@ -114,7 +117,10 @@ pub(crate) async fn judge_problem_by_id(
                 "errorDetail": format!("Judging failed: {}", e),
             }),
         };
-        trace!("Result to report: {}, submission_id={}", json_content, payload.submission_id);
+        debug!(
+            "Result to report: {}, submission_id={}",
+            json_content, payload.submission_id
+        );
         info!(
             "Reporting result to backend for submission_id={}",
             payload.submission_id

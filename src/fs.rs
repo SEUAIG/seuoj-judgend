@@ -22,7 +22,8 @@ static INSTANCE: OnceCell<FileSystem> = OnceCell::const_new();
 
 /// Read and write files to the local filesystem.
 pub struct FileSystem {
-    base_path: PathBuf,
+    problems_dir: PathBuf,
+    submissions_dir: PathBuf,
 }
 
 impl FileSystem {
@@ -48,7 +49,8 @@ impl FileSystem {
                         })?;
                 }
                 Ok(FileSystem {
-                    base_path: config.problems_dir.clone(),
+                    problems_dir: config.problems_dir.clone(),
+                    submissions_dir: config.submissions_dir.clone(),
                 })
             })
             .await
@@ -87,7 +89,7 @@ pub(crate) async fn get_path_by_id_name(
 
 pub(crate) async fn get_dir_by_problem_id(pid: impl AsRef<str>, create: bool) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
-    let dir_path = fs.base_path.join(pid.as_ref());
+    let dir_path = fs.problems_dir.join(pid.as_ref());
     if create && !dir_path.exists() {
         create_dir_all(&dir_path).await?;
     }
@@ -96,10 +98,7 @@ pub(crate) async fn get_dir_by_problem_id(pid: impl AsRef<str>, create: bool) ->
 
 pub(crate) async fn get_dir_by_submission_id(submission_id: impl AsRef<str>) -> Result<PathBuf> {
     let fs = FileSystem::get().await?;
-    let dir_path = fs
-        .base_path
-        .join("submissions")
-        .join(submission_id.as_ref());
+    let dir_path = fs.submissions_dir.join(submission_id.as_ref());
     if !dir_path.exists() {
         create_dir_all(&dir_path).await?;
     }

@@ -30,6 +30,9 @@ pub struct AijConfig {
     /// Path of the log directory
     #[serde(default = "default_log_dir")]
     pub log_dir: PathBuf,
+    /// Path of the submissions directory
+    #[serde(default = "default_submissions_dir")]
+    pub submissions_dir: PathBuf,
     /// Path of testlib directory
     #[serde(default = "default_testlib_dir")]
     pub testlib_dir: PathBuf,
@@ -76,6 +79,10 @@ fn default_log_dir() -> PathBuf {
     "./assets/logs/".into()
 }
 
+fn default_submissions_dir() -> PathBuf {
+    "./assets/submissions/".into()
+}
+
 fn default_testlib_dir() -> PathBuf {
     "./assets/testlib/".into()
 }
@@ -93,7 +100,7 @@ fn default_backend_prefix() -> String {
 }
 
 fn default_save_submissions() -> bool {
-    false
+    true
 }
 
 fn default_output_truncate_length() -> usize {

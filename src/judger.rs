@@ -50,7 +50,7 @@ pub(crate) async fn judge(
         SupportedLanguages::Go1_22 => "go",
         SupportedLanguages::Java17 => "java",
     };
-    let source_file_path = tmp_dir.join("Main").with_extension(source_file_extension);
+    let mut source_file_path = tmp_dir.join("source").with_extension(source_file_extension);
 
     fs::write_to_file(&source_file_path, code).await?;
     let (exec_path, args, seccomp_rule) = match language {
@@ -90,16 +90,18 @@ pub(crate) async fn judge(
                     .output()
                     .await
             }
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
@@ -154,7 +156,9 @@ pub(crate) async fn judge(
                 })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
             }
             problem_config.problem_info.memory_limit_kb =
                 match problem_config.problem_info.memory_limit_kb {
@@ -164,6 +168,11 @@ pub(crate) async fn judge(
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
         SupportedLanguages::Java17 => {
+            let new_source_file_path = source_file_path
+                .with_file_name("Main")
+                .with_extension("java");
+            fs::rename(&source_file_path, &new_source_file_path).await?;
+            source_file_path = new_source_file_path;
             problem_config.problem_info.time_limit_ms =
                 match problem_config.problem_info.time_limit_ms {
                     -1 => -1,
@@ -183,7 +192,9 @@ pub(crate) async fn judge(
                 })?;
             if !compile_output.status.success() {
                 let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(JudgeResult::CompileError { detail: stderr.to_string() });
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
             }
             let mut args = vec![
                 "java".to_string(),
@@ -263,7 +274,7 @@ pub(crate) async fn judge(
                     args.clone(),
                     &tmp_dir,
                 )
-                    .await?;
+                .await?;
                 scores.push(res.score);
                 out_vec.push(res.clone());
                 if res.r#type != JudgeResultType::Accepted {
@@ -329,12 +340,15 @@ pub(crate) async fn judge(
                 args.clone(),
                 &tmp_dir,
             )
-                .await?;
+            .await?;
             res.score = (res.score as f64 * case_config.weight / sum_weight) as i32;
             out_vec.push(res);
         }
     }
-    Ok(JudgeResult::MaybeError { results: out_vec, subtask_configs: subtasks })
+    Ok(JudgeResult::MaybeError {
+        results: out_vec,
+        subtask_configs: subtasks,
+    })
 }
 
 async fn judge_single_case(
@@ -423,7 +437,7 @@ async fn judge_single_case(
                     &ans_path,
                     checker_type,
                 )
-                    .await?
+                .await?
                 {
                     CheckerResult::Accepted => {}
                     CheckerResult::PartiallyAccepted(score_f, detail) => {
@@ -431,19 +445,25 @@ async fn judge_single_case(
                         result = (detail, JudgeResultType::PartiallyAccepted);
                         score = score_i;
                     }
-                    CheckerResult::WrongAnswer(detail) => result = (detail, JudgeResultType::WrongAnswer),
+                    CheckerResult::WrongAnswer(detail) => {
+                        result = (detail, JudgeResultType::WrongAnswer)
+                    }
                 }
             }
             result
         }
         judger::ErrorCode::WrongAnswer(s) => (s, JudgeResultType::WrongAnswer),
-        judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => {
-            ("Time Limit Exceeded".to_string(), JudgeResultType::TimeLimitExceeded)
+        judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => (
+            "Time Limit Exceeded".to_string(),
+            JudgeResultType::TimeLimitExceeded,
+        ),
+        judger::ErrorCode::MemoryLimitExceeded => (
+            "Memory Limit Exceeded".to_string(),
+            JudgeResultType::MemoryLimitExceeded,
+        ),
+        judger::ErrorCode::RuntimeError => {
+            ("Runtime Error".to_string(), JudgeResultType::RuntimeError)
         }
-        judger::ErrorCode::MemoryLimitExceeded => {
-            ("Memory Limit Exceeded".to_string(), JudgeResultType::MemoryLimitExceeded)
-        }
-        judger::ErrorCode::RuntimeError => ("Runtime Error".to_string(), JudgeResultType::RuntimeError),
         judger::ErrorCode::SystemError => {
             let err_info = format!(
                 "Judger System Error on submission {} test case {}: {:?}",
@@ -471,7 +491,11 @@ async fn judge_single_case(
         r#in: in_content,
         ans: ans_content,
         out: out_content,
-        score: if r#type == JudgeResultType::Accepted { 100 } else { score },
+        score: if r#type == JudgeResultType::Accepted {
+            100
+        } else {
+            score
+        },
         r#type,
     })
 }
@@ -525,7 +549,7 @@ pub(crate) struct JudgeResultItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum JudgeResult {
     CompileError {
-        detail: String
+        detail: String,
     },
     MaybeError {
         results: Vec<JudgeResultItem>,
