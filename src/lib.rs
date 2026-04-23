@@ -21,6 +21,7 @@ pub mod error;
 pub mod fs;
 pub mod judger;
 pub mod logger;
+pub mod markdown;
 pub mod schema;
 pub mod server;
 

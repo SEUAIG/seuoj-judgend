@@ -1,7 +1,7 @@
 //! Data schemas for problem configuration and metadata.
 //!
 //! This module defines the data structures for:
-//! 1. Problem metadata and description (stored as JSON)
+//! 1. Problem metadata and description (stored as Markdown with YAML frontmatter)
 //! 2. Problem configuration (stored as TOML)
 
 use crate::error::{AijError, Result};
@@ -11,7 +11,7 @@ use judger::Config;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-/// Problem metadata and description stored as JSON.
+/// Problem metadata and description (stored as Markdown with YAML frontmatter).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct ProblemMetadata {
     /// Problem ID
@@ -30,36 +30,21 @@ pub(crate) struct ProblemMetadata {
 
 impl ProblemMetadata {
     pub(crate) async fn from_pid(pid: impl AsRef<str>) -> Result<Self> {
-        let meta_json = fs::read_file_by_id_name(&pid, "problem.json").await?;
-        Self::from_json_str(meta_json)
-    }
-
-    pub(crate) fn from_json_str(toml_str: impl AsRef<str>) -> Result<Self> {
-        let metadata: Self = serde_json::from_str(toml_str.as_ref()).map_err(|e| {
-            AijError::Request(
-                StatusCode::BAD_REQUEST,
-                "INVALID_JSON".to_string(),
-                e.to_string(),
-            )
-        })?;
-        Ok(metadata)
+        let md_content = fs::read_file_by_id_name(&pid, "problem.md").await?;
+        crate::markdown::parse_problem_md(&md_content)
     }
 
     pub(crate) async fn save(&self, pid: impl AsRef<str>) -> Result<()> {
-        let problem_json = serde_json::to_string_pretty(&self).map_err(|e| {
+        let md_content = crate::markdown::serialize_problem_md(self).map_err(|e| {
             error!(
                 "Failed to serialize problem info for problem id {}: {}",
                 pid.as_ref(),
                 e
             );
-            AijError::Server(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "FAILED_SERIALIZE_PROBLEM_INFO".to_string(),
-                format!("Failed to serialize problem info: {}", e),
-            )
+            e
         })?;
-        let meta_path = fs::get_path_by_pid_name(pid.as_ref(), "problem.json", false).await?;
-        fs::write_to_file(&meta_path, &problem_json).await
+        let md_path = fs::get_path_by_pid_name(pid.as_ref(), "problem.md", false).await?;
+        fs::write_to_file(&md_path, &md_content).await
     }
 }
 

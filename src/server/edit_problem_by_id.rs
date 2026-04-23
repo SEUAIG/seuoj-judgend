@@ -1,5 +1,4 @@
 use crate::error::Result;
-use crate::fs;
 use crate::fs::check_problem_exists;
 use crate::schema::{ProblemConfig, ProblemExample, ProblemMetadata};
 use crate::server::AppJson;
@@ -88,20 +87,12 @@ pub(crate) async fn edit_problem_by_id(
         problem_config.save(&problem_id).await?;
     }
 
-    // Handle problem metadata (problem.json)
-    // Read existing metadata if it exists
-    let mut metadata = if !is_new
-        && let Ok(content) = fs::read_file_by_id_name(problem_id, "problem.json").await
-    {
-        // Try to read existing problem.json
-        serde_json::from_str::<ProblemMetadata>(&content).map_err(|e| {
-            error!("Failed to parse existing problem.json: {}", e);
-            crate::error::AijError::Request(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "FAILED_PARSE_PROBLEM_METADATA".to_string(),
-                format!("Failed to parse existing problem.json: {}", e),
-            )
-        })?
+    // Read existing metadata
+    let mut metadata = if !is_new {
+        ProblemMetadata::from_pid(problem_id).await.unwrap_or_else(|_| ProblemMetadata {
+            pid: problem_id.clone(),
+            ..Default::default()
+        })
     } else {
         ProblemMetadata {
             pid: problem_id.clone(),
