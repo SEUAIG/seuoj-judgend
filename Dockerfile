@@ -15,9 +15,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . .
 
-# 编译 Rust
+# 优化：先只复制依赖清单，构建空壳项目以缓存依赖
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src/bin && \
+    echo 'fn main() {}' > src/bin/main.rs && \
+    echo '' > src/lib.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# 复制真正的源码并编译（依赖层已缓存）
+COPY . .
 RUN cargo build --release
 
 # --- 第二阶段：全语言运行环境 ---
