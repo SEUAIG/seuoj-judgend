@@ -18,10 +18,18 @@ async fn main() -> Result<(), String> {
     info!("Server listening on {}", listen_addr);
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
-            #[allow(clippy::expect_used)]
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install Ctrl+C handler");
+            let ctrl_c = signal::ctrl_c();
+            #[cfg(unix)]
+            let mut sigterm =
+                signal::unix::signal(signal::unix::SignalKind::terminate())
+                    .expect("Failed to install SIGTERM handler");
+            #[cfg(unix)]
+            tokio::select! {
+                _ = ctrl_c => {}
+                _ = sigterm.recv() => {}
+            }
+            #[cfg(not(unix))]
+            ctrl_c.await.expect("Failed to install Ctrl+C handler");
             info!("Shutdown signal received, shutting down...");
         })
         .await
