@@ -26,7 +26,7 @@ RUN mkdir -p src/bin && \
 
 # 复制真正的源码并编译（依赖层已缓存）
 COPY . .
-RUN cargo build --release
+RUN find src -type f -exec touch {} + && cargo build --release
 
 # --- 第二阶段：全语言运行环境 ---
 FROM ubuntu:24.04 AS runtime
