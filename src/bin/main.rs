@@ -20,9 +20,8 @@ async fn main() -> Result<(), String> {
         .with_graceful_shutdown(async {
             let ctrl_c = signal::ctrl_c();
             #[cfg(unix)]
-            let mut sigterm =
-                signal::unix::signal(signal::unix::SignalKind::terminate())
-                    .expect("Failed to install SIGTERM handler");
+            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to install SIGTERM handler");
             #[cfg(unix)]
             tokio::select! {
                 _ = ctrl_c => {}

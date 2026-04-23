@@ -89,10 +89,12 @@ pub(crate) async fn edit_problem_by_id(
 
     // Read existing metadata
     let mut metadata = if !is_new {
-        ProblemMetadata::from_pid(problem_id).await.unwrap_or_else(|_| ProblemMetadata {
-            pid: problem_id.clone(),
-            ..Default::default()
-        })
+        ProblemMetadata::from_pid(problem_id)
+            .await
+            .unwrap_or_else(|_| ProblemMetadata {
+                pid: problem_id.clone(),
+                ..Default::default()
+            })
     } else {
         ProblemMetadata {
             pid: problem_id.clone(),

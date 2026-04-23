@@ -308,7 +308,9 @@ fn extract_code_block_and_remainder(lines: &[&str]) -> (String, String) {
         }
 
         if in_block {
-            if trimmed == "```" || (trimmed.starts_with("```") && trimmed.trim_start_matches('`').is_empty()) {
+            if trimmed == "```"
+                || (trimmed.starts_with("```") && trimmed.trim_start_matches('`').is_empty())
+            {
                 block_ended = true;
                 continue;
             }
