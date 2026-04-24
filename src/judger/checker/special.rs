@@ -10,10 +10,33 @@ pub(crate) async fn special_checker(
     input_path: impl AsRef<Path>,
     output_path: impl AsRef<Path>,
     ans_path: impl AsRef<Path>,
+    checker_path: Option<&str>,
 ) -> crate::error::Result<CheckerResult> {
     {
         info!("Using special checker for problem {}", problem_id.as_ref());
-        let checker_path = get_path_by_pid_name(problem_id.as_ref(), "data/checker", true).await?;
+        let checker_path = checker_path.ok_or_else(|| {
+            let message = format!(
+                "Checker path is missing in problem config for special problem {}",
+                problem_id.as_ref()
+            );
+            error!("{}", message);
+            crate::error::AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "CHECKER_PATH_MISSING".to_string(),
+                message,
+            )
+        })?;
+        let checker_exec_path = if checker_path.ends_with(".cpp") {
+            Path::new(checker_path).with_extension("")
+        } else {
+            checker_path.into()
+        };
+        let checker_path = get_path_by_pid_name(
+            problem_id.as_ref(),
+            format!("data/{}", checker_exec_path.to_string_lossy()),
+            true,
+        )
+        .await?;
         chmod_plus_x(&checker_path).await.map_err(|e| {
             let message = format!(
                 "Failed to set execute permission for checker of problem {}: {}",
@@ -97,9 +120,10 @@ mod tests {
         let input_path = "assets/problems/test01/data/1.in";
         let output_path = "assets/problems/test01/data/1.ans";
         let ans_path = "assets/problems/test01/data/1.ans";
-        let res = super::special_checker("test01", input_path, output_path, ans_path)
-            .await
-            .unwrap();
+        let res =
+            super::special_checker("test01", input_path, output_path, ans_path, Some("checker"))
+                .await
+                .unwrap();
         assert!(matches!(res, super::CheckerResult::Accepted));
     }
 }

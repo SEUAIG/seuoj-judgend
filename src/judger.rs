@@ -4,7 +4,9 @@ use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_pid_name, get_text_by_path};
-use crate::schema::{CheckerType, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig};
+use crate::schema::{
+    CheckerType, CustomModules, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig,
+};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -221,6 +223,7 @@ pub(crate) async fn judge(
     let mut out_vec = vec![];
     let problem_type = problem_config.problem_info.problem_type;
     let checker_type = problem_config.problem_info.checker_type;
+    let custom_modules = problem_config.custom_modules.clone();
 
     let topo_order = utils::get_topo_order(&problem_config.subtasks)?;
     info!(
@@ -268,7 +271,7 @@ pub(crate) async fn judge(
                 let res = judge_single_case(
                     case_config,
                     (&pid, &submission_id),
-                    (problem_type, checker_type),
+                    (problem_type, checker_type, &custom_modules),
                     &judge_config,
                     exec_path.clone(),
                     args.clone(),
@@ -334,7 +337,7 @@ pub(crate) async fn judge(
             let mut res = judge_single_case(
                 case_config,
                 (&pid, &submission_id),
-                (problem_type, checker_type),
+                (problem_type, checker_type, &custom_modules),
                 &judge_config,
                 exec_path.clone(),
                 args.clone(),
@@ -354,7 +357,11 @@ pub(crate) async fn judge(
 async fn judge_single_case(
     case_config: &TestCaseConfig,
     (pid, submission_id): (&str, &str),
-    (problem_type, checker_type): (ProblemType, CheckerType),
+    (problem_type, checker_type, custom_modules): (
+        ProblemType,
+        CheckerType,
+        &Option<CustomModules>,
+    ),
     judge_config: &judger::Config,
     exec_path: String,
     args: Vec<String>,
@@ -363,8 +370,17 @@ async fn judge_single_case(
     let input_path =
         get_path_by_pid_name(&pid, format!("data/{}", case_config.in_path), true).await?;
     let ans_path = match problem_type {
-        ProblemType::Standard | ProblemType::Special => {
+        ProblemType::Standard => {
             get_path_by_pid_name(&pid, format!("data/{}", case_config.ans_path), true).await?
+        }
+        ProblemType::Special => {
+            if case_config.ans_path.is_empty() {
+                let fallback_ans_path = tmp_dir.join(format!("{}.ans", case_config.id));
+                fs::write_to_file(&fallback_ans_path, []).await?;
+                fallback_ans_path
+            } else {
+                get_path_by_pid_name(&pid, format!("data/{}", case_config.ans_path), true).await?
+            }
         }
         ProblemType::Interactive => tmp_dir.join(format!("{}.ans", case_config.id)),
     };
@@ -396,7 +412,30 @@ async fn judge_single_case(
     let interactor = match problem_type {
         ProblemType::Standard | ProblemType::Special => None,
         ProblemType::Interactive => Some({
-            let path = get_path_by_pid_name(&pid, "data/interactor", true).await?;
+            let interactor_path = custom_modules
+                .as_ref()
+                .and_then(|m| m.interactor_path.as_deref())
+                .ok_or_else(|| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "INTERACTOR_PATH_MISSING".to_string(),
+                        format!(
+                            "Interactor path is missing in problem config for interactive problem {}",
+                            pid
+                        ),
+                    )
+                })?;
+            let interactor_exec_path = if interactor_path.ends_with(".cpp") {
+                std::path::Path::new(interactor_path).with_extension("")
+            } else {
+                std::path::PathBuf::from(interactor_path)
+            };
+            let path = get_path_by_pid_name(
+                &pid,
+                format!("data/{}", interactor_exec_path.to_string_lossy()),
+                true,
+            )
+            .await?;
             chmod_plus_x(&path).await?;
             path
         }),
@@ -436,6 +475,9 @@ async fn judge_single_case(
                     &config.output_path,
                     &ans_path,
                     checker_type,
+                    custom_modules
+                        .as_ref()
+                        .and_then(|m| m.checker_path.as_deref()),
                 )
                 .await?
                 {
