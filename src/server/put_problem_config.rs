@@ -76,6 +76,7 @@ pub(crate) async fn put_problem_config(
     }
 
     let mut existing_id = HashSet::new();
+    let mut total_weight = 0;
     for case in &problem_config.testcases {
         if !existing_id.insert(case.id) {
             return Err(crate::error::AijError::Request(
@@ -84,7 +85,7 @@ pub(crate) async fn put_problem_config(
                 format!("Duplicate test case ID: {}", case.id),
             ));
         }
-        if case.weight <= 0.0 {
+        if case.weight <= 0 {
             return Err(crate::error::AijError::Request(
                 axum::http::StatusCode::BAD_REQUEST,
                 "INVALID_TEST_CASE_WEIGHT".to_string(),
@@ -94,6 +95,7 @@ pub(crate) async fn put_problem_config(
                 ),
             ));
         }
+        total_weight += case.weight;
         let in_path = &case.in_path;
         fs::validate_filename(in_path)?;
         let _ = fs::get_path_by_pid_name(&pid, format!("data/{in_path}"), true).await?;
@@ -102,6 +104,16 @@ pub(crate) async fn put_problem_config(
             fs::validate_filename(ans_path)?;
             let _ = fs::get_path_by_pid_name(&pid, format!("data/{ans_path}"), true).await?;
         }
+    }
+    if total_weight != 100 {
+        return Err(crate::error::AijError::Request(
+            axum::http::StatusCode::BAD_REQUEST,
+            "INVALID_TEST_CASE_WEIGHT_SUM".to_string(),
+            format!(
+                "Sum of test case weights must be 100, but got {}",
+                total_weight
+            ),
+        ));
     }
     let all_case_ids = existing_id;
     if !problem_config.subtasks.is_empty() {

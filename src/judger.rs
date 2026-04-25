@@ -325,12 +325,15 @@ pub(crate) async fn judge(
             }
         }
     } else {
-        let sum_weight: f64 = problem_config.testcases.iter().map(|s| s.weight).sum();
-        if sum_weight == 0.0 {
+        let sum_weight: i32 = problem_config.testcases.iter().map(|s| s.weight).sum();
+        if sum_weight != 100 {
             return Err(AijError::Judge(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INVALID_TESTCASE_WEIGHT".to_string(),
-                "Sum of test case weights cannot be zero".to_string(),
+                format!(
+                    "Sum of test case weights must be 100, but got {}",
+                    sum_weight
+                ),
             ));
         }
         for case_config in &problem_config.testcases {
@@ -344,7 +347,7 @@ pub(crate) async fn judge(
                 &tmp_dir,
             )
             .await?;
-            res.score = (res.score as f64 * case_config.weight / sum_weight) as i32;
+            res.score = (res.score * case_config.weight) / 100;
             out_vec.push(res);
         }
     }

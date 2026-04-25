@@ -82,7 +82,7 @@ memory_limit_kb = 256000
 id = 1
 in_path = "1.in" # 输入文件路径，相对于题目目录/data
 ans_path = "1.ans" # 答案文件路径，相对于题目目录/data，仅 checker_type != "Interactor" 时需要提供
-weight = 1.0
+weight = 100 # 测试点分值，必须为整数，且所有测试点之和必须为 100
 
 [[subtasks]]
 id = 1

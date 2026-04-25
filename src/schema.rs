@@ -167,9 +167,9 @@ pub(crate) struct TestCaseConfig {
     pub(crate) in_path: String,
     /// Path to output/answer file (relative to problem directory)
     pub(crate) ans_path: String,
-    /// Weight for scoring (default: 1.0)
+    /// Score weight for this test case (default: 100)
     #[serde(default = "default_weight")]
-    pub(crate) weight: f64,
+    pub(crate) weight: i32,
     /// Override time limit (milliseconds), null to use global
     #[serde(default)]
     pub(crate) time_limit_ms: Option<i32>,
@@ -178,8 +178,8 @@ pub(crate) struct TestCaseConfig {
     pub(crate) memory_limit_kb: Option<i64>,
 }
 
-fn default_weight() -> f64 {
-    1.0
+fn default_weight() -> i32 {
+    100
 }
 
 /// Subtask configuration
