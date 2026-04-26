@@ -15,8 +15,9 @@ pub(crate) async fn get_problem_file(
     let file_content = match filename.as_str() {
         "data.zip" => {
             let data_paths = fs::get_data_paths_by_id(&pid).await?;
+            let data_dir = fs::get_path_by_pid_name(&pid, "data/", false).await?;
             info!("Creating zip stream for data files of problem {}", pid,);
-            fs::create_zip_stream(data_paths).await?
+            fs::create_zip_stream(data_paths, data_dir).await?
         }
         _ => {
             fs::validate_filename(&filename)?;

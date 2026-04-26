@@ -38,7 +38,7 @@ pub fn app() -> Router {
         .route("/judge/problem/config/{pid}", put(put_problem_config))
         .route("/judge/problem/tree/{pid}", get(get_problem_tree))
         .route(
-            "/judge/problem/file/{pid}/{filename}",
+            "/judge/problem/file/{pid}/{*filename}",
             get(get_problem_file),
         )
         .route("/judge/submission/tree/{sid}", get(get_submission_tree))
@@ -47,7 +47,7 @@ pub fn app() -> Router {
             get(get_submission_file),
         )
         .route(
-            "/judge/problem/file/{pid}/{filename}",
+            "/judge/problem/file/{pid}/{*filename}",
             delete(delete_problem_file),
         )
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB

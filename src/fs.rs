@@ -307,8 +307,10 @@ pub(crate) fn validate_filename(filename: impl AsRef<str>) -> Result<()> {
     let regex = FILENAME_REGEX.get_or_init(|| {
         // SAFE: HARD-CODED REGEX, NO USER INPUT
         #[allow(clippy::expect_used)]
-        regex::Regex::new(r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$")
-            .expect("Failed to compile filename validation regex")
+        regex::Regex::new(
+            r"^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*)*$",
+        )
+        .expect("Failed to compile filename validation regex")
     });
     if filename.is_empty() || !regex.is_match(filename) {
         warn!("Invalid filename: {}", filename);
@@ -349,7 +351,11 @@ pub(crate) async fn unzip_bytes_to_path(
                 )
             })?;
 
-            validate_filename(file.name())?;
+            let entry_name = file.name().trim_end_matches('/');
+            if entry_name.is_empty() {
+                continue;
+            }
+            validate_filename(entry_name)?;
 
             let out_path = path_buf.join(file.mangled_name());
 
@@ -478,6 +484,7 @@ pub(crate) async fn delete_file(path: impl AsRef<Path>) -> Result<()> {
 
 pub(crate) async fn create_zip_stream(
     paths: Vec<PathBuf>,
+    base_dir: PathBuf,
 ) -> Result<BoxStream<'static, std::io::Result<Bytes>>> {
     let zip_data = tokio::task::spawn_blocking(move || -> std::result::Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
@@ -488,8 +495,13 @@ pub(crate) async fn create_zip_stream(
                 SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
             for path in paths {
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    zip.start_file(file_name, options)
+                let relative = path
+                    .strip_prefix(&base_dir)
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if !relative.is_empty() {
+                    zip.start_file(relative, options)
                         .map_err(|e| e.to_string())?;
 
                     let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
@@ -528,25 +540,54 @@ pub(crate) async fn get_data_paths_by_id(pid: impl AsRef<str>) -> Result<Vec<Pat
     let data_dir = get_dir_by_problem_id(pid, false).await?.join("data");
     let mut data_files = Vec::new();
     if data_dir.exists() {
-        let mut entries = tokio::fs::read_dir(data_dir).await.map_err(|e| {
-            warn!("Failed to read data directory: {}", e);
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "READ_DATA_DIR_FAILED".to_string(),
-                format!("Failed to read data directory: {}", e),
-            )
-        })?;
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            warn!("Failed to read data directory: {}", e);
-            AijError::FileSystem(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "READ_DATA_DIR_FAILED".to_string(),
-                format!("Failed to read data directory: {}", e),
-            )
-        })? {
-            let path = entry.path();
-            if path.is_file() {
-                data_files.push(path);
+        let mut dirs = vec![data_dir];
+        while let Some(dir) = dirs.pop() {
+            let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| {
+                warn!(
+                    "Failed to read data directory {}: {}",
+                    dir.to_string_lossy(),
+                    e
+                );
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "READ_DATA_DIR_FAILED".to_string(),
+                    format!(
+                        "Failed to read data directory {}: {}",
+                        dir.to_string_lossy(),
+                        e
+                    ),
+                )
+            })?;
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                warn!(
+                    "Failed to read data directory {}: {}",
+                    dir.to_string_lossy(),
+                    e
+                );
+                AijError::FileSystem(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "READ_DATA_DIR_FAILED".to_string(),
+                    format!(
+                        "Failed to read data directory {}: {}",
+                        dir.to_string_lossy(),
+                        e
+                    ),
+                )
+            })? {
+                let path = entry.path();
+                let file_type = entry.file_type().await.map_err(|e| {
+                    warn!("Failed to read file type {}: {}", path.to_string_lossy(), e);
+                    AijError::FileSystem(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "READ_DATA_DIR_FAILED".to_string(),
+                        format!("Failed to read file type {}: {}", path.to_string_lossy(), e),
+                    )
+                })?;
+                if file_type.is_dir() {
+                    dirs.push(path);
+                } else if file_type.is_file() {
+                    data_files.push(path);
+                }
             }
         }
     }
