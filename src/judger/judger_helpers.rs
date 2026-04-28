@@ -1,3 +1,4 @@
+// Shared utility helpers for permission, compilation, and subtask topology.
 use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;

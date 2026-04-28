@@ -1,11 +1,12 @@
+// Judge one offline testcase, including run + checker + result assembly.
 use crate::config::AijConfig;
 use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_path_by_pid_name, get_text_by_path};
 use crate::judger::checker::{self, CheckerResult};
-use crate::judger::execution::{ResourceLimits, RunPaths, build_run_config, run_with_interactor};
-use crate::judger::types::{JudgeResultItem, JudgeResultType};
-use crate::judger::utils::chmod_plus_x;
+use crate::judger::judge_result::{JudgeResultItem, JudgeResultType};
+use crate::judger::judger_helpers::chmod_plus_x;
+use crate::judger::runtime::{ResourceLimits, RunPaths, build_run_config, run_with_interactor};
 use crate::schema::{CheckerType, CustomModules, ProblemType, TestCaseConfig};
 use axum::http::StatusCode;
 use tracing::{info, warn};

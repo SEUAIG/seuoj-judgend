@@ -1,10 +1,11 @@
+// Run ad-hoc online testcases without checker scoring.
 use crate::error::Result;
 use crate::fs;
 use crate::fs::get_text_by_path;
-use crate::judger::execution::{
+use crate::judger::judge_result::{JudgeResult, JudgeResultItem};
+use crate::judger::runtime::{
     ResourceLimits, RunPaths, build_run_config, map_runtime_status, run_with_interactor,
 };
-use crate::judger::types::{JudgeResult, JudgeResultItem};
 use crate::schema::OnlineCase;
 
 pub(crate) async fn run_online_cases(

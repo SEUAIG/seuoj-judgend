@@ -1,5 +1,6 @@
+// Runtime helpers for translating limits and invoking the sandboxed runner.
 use crate::error::{AijError, Result};
-use crate::judger::types::JudgeResultType;
+use crate::judger::judge_result::JudgeResultType;
 use axum::http::StatusCode;
 use std::path::Path;
 

@@ -1,3 +1,4 @@
+// Standard checker: whitespace-tolerant line-by-line answer comparison.
 use crate::error::Result;
 use crate::fs::get_text_by_path;
 use crate::judger::checker::CheckerResult;

@@ -1,6 +1,7 @@
+// Special checker wrapper that executes problem-provided checker binaries.
 use crate::fs::get_path_by_pid_name;
 use crate::judger::checker::CheckerResult;
-use crate::judger::utils::chmod_plus_x;
+use crate::judger::judger_helpers::chmod_plus_x;
 use axum::http::StatusCode;
 use std::path::Path;
 use tracing::{error, info};
