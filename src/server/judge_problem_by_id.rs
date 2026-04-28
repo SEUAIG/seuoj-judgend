@@ -158,7 +158,7 @@ pub(crate) async fn judge_problem_online_by_id(
     Ok(Json(json!({
         "code": 0,
         "message": "Success",
-        "data": parse_online_content_from_result(res),
+        "data": parse_content_from_result(res),
     })))
 }
 
@@ -189,35 +189,6 @@ fn parse_content_from_result(res: Result<JudgeResult>) -> Value {
                 }
             }
         }
-        Err(e) => json!({
-            "status": "JudgendError",
-            "errorDetail": format!("Judging failed: {}", e),
-        }),
-    }
-}
-
-fn parse_online_content_from_result(res: Result<JudgeResult>) -> Value {
-    match res {
-        Ok(result) => match result {
-            JudgeResult::CompileError { detail } => json!({
-                "status": "CompileError",
-                "errorDetail": detail,
-            }),
-            JudgeResult::MaybeError { results, .. } => json!({
-                "status": "Success",
-                "resultDetail": results.into_iter().map(|r| {
-                    json!({
-                        "id": r.id,
-                        "time": r.time,
-                        "mem": r.mem,
-                        "sys": r.sys,
-                        "in": r.r#in,
-                        "out": r.out,
-                        "type": r.r#type,
-                    })
-                }).collect::<Vec<_>>(),
-            }),
-        },
         Err(e) => json!({
             "status": "JudgendError",
             "errorDetail": format!("Judging failed: {}", e),

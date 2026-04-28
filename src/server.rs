@@ -67,10 +67,8 @@ where
 static JUDGE_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
 
 pub(crate) async fn get_judge_semaphore() -> &'static Semaphore {
-    if JUDGE_SEMAPHORE.get().is_none() {
+    JUDGE_SEMAPHORE.get_or_init(|| {
         let max_concurrent = AijConfig::get().max_concurrent_requests;
-        let _ = JUDGE_SEMAPHORE.set(Semaphore::new(max_concurrent));
-    }
-    #[allow(clippy::unwrap_used)]
-    JUDGE_SEMAPHORE.get().unwrap()
+        Semaphore::new(max_concurrent)
+    })
 }

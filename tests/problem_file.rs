@@ -12,7 +12,7 @@ async fn test_get_problem_file() {
     response.assert_header("content-type", "application/octet-stream");
 
     let body = response.as_bytes();
-    let body_str = String::from_utf8_lossy(&body);
+    let body_str = String::from_utf8_lossy(body);
     assert_eq!(body_str, "1 2");
 }
 
