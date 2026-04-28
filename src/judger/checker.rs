@@ -1,3 +1,4 @@
+// Checker dispatch layer for standard and special checker implementations.
 mod special;
 mod standard;
 

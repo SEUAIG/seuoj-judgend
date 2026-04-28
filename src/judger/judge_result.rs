@@ -1,3 +1,4 @@
+// Shared result models returned by judge flows.
 use crate::schema::SubtaskConfig;
 use serde::{Deserialize, Serialize};
 

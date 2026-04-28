@@ -5,20 +5,20 @@ use crate::fs::get_dir_by_submission_id;
 use crate::schema::{OnlineCase, ProblemConfig};
 use serde::Deserialize;
 
-mod case;
+mod build_plan;
+mod case_judge;
 mod checker;
-mod execution;
-mod online;
-mod prepare;
-mod scoring;
-mod types;
-mod utils;
+mod judge_result;
+mod judger_helpers;
+mod offline_cases;
+mod online_cases;
+mod runtime;
 
-use crate::judger::online::run_online_cases;
-use crate::judger::prepare::{PrepareOutcome, prepare_execution};
-use crate::judger::scoring::run_offline_cases;
-pub(crate) use crate::judger::types::{JudgeResult, JudgeResultItem, JudgeResultType};
-pub(crate) use utils::compile;
+use crate::judger::build_plan::{PrepareOutcome, prepare_execution};
+pub(crate) use crate::judger::judge_result::{JudgeResult, JudgeResultItem, JudgeResultType};
+use crate::judger::offline_cases::run_offline_cases;
+use crate::judger::online_cases::run_online_cases;
+pub(crate) use judger_helpers::compile;
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

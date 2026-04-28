@@ -1,5 +1,6 @@
+// Run all offline testcases with subtask dependency and scoring logic.
 use crate::error::{AijError, Result};
-use crate::judger::case::judge_single_case;
+use crate::judger::case_judge::judge_single_case;
 use crate::judger::{JudgeResultItem, JudgeResultType};
 use crate::schema::{CheckerType, CustomModules, ProblemConfig, ProblemType, SubtaskConfig};
 use axum::http::StatusCode;
@@ -20,7 +21,7 @@ pub(crate) async fn run_offline_cases(
     let checker_type = problem_config.problem_info.checker_type;
     let custom_modules = problem_config.custom_modules.clone();
 
-    let topo_order = crate::judger::utils::get_topo_order(&problem_config.subtasks)?;
+    let topo_order = crate::judger::judger_helpers::get_topo_order(&problem_config.subtasks)?;
     info!(
         "Topological order of subtasks for problem {}: {:?}",
         pid, topo_order
