@@ -23,6 +23,20 @@ pub enum AijError {
     Request(StatusCode, String, String),
 }
 
+impl AijError {
+    /// set error code
+    pub fn set_code(self, code: StatusCode) -> Self {
+        match self {
+            AijError::Config(_, short, long) => AijError::Config(code, short, long),
+            AijError::Logger(_, short, long) => AijError::Logger(code, short, long),
+            AijError::Server(_, short, long) => AijError::Server(code, short, long),
+            AijError::FileSystem(_, short, long) => AijError::FileSystem(code, short, long),
+            AijError::Judge(_, short, long) => AijError::Judge(code, short, long),
+            AijError::Request(_, short, long) => AijError::Request(code, short, long),
+        }
+    }
+}
+
 impl Display for AijError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

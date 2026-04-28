@@ -27,6 +27,7 @@ pub(crate) use edit_problem_by_id::edit_problem_by_id;
 pub(crate) use get_problem_config::get_problem_config;
 pub(crate) use get_tree::{get_problem_tree, get_submission_tree};
 pub(crate) use judge_problem_by_id::judge_problem_by_id;
+pub(crate) use judge_problem_by_id::judge_problem_online_by_id;
 pub(crate) use put_problem_config::put_problem_config;
 pub(crate) use serve_problem_by_id::delete_problem_by_id;
 pub(crate) use serve_problem_by_id::get_problem_by_id;

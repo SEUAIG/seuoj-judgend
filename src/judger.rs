@@ -5,7 +5,8 @@ use crate::error::{AijError, Result};
 use crate::fs;
 use crate::fs::{get_dir_by_submission_id, get_path_by_pid_name, get_text_by_path};
 use crate::schema::{
-    CheckerType, CustomModules, ProblemConfig, ProblemType, SubtaskConfig, TestCaseConfig,
+    CheckerType, CustomModules, OnlineCase, ProblemConfig, ProblemType, SubtaskConfig,
+    TestCaseConfig,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -354,6 +355,268 @@ pub(crate) async fn judge(
     Ok(JudgeResult::MaybeError {
         results: out_vec,
         subtask_configs: subtasks,
+    })
+}
+
+pub(crate) async fn judge_online(
+    pid: String,
+    code: String,
+    language: SupportedLanguages,
+    submission_id: String,
+    testcases: Vec<OnlineCase>,
+) -> Result<JudgeResult> {
+    let mut problem_config = ProblemConfig::from_pid(&pid).await?;
+    let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
+    let source_file_extension = match language {
+        SupportedLanguages::C => "c",
+        SupportedLanguages::Cpp
+        | SupportedLanguages::Cpp11
+        | SupportedLanguages::Cpp17
+        | SupportedLanguages::Cpp20 => "cpp",
+        SupportedLanguages::Python3_12 => "py",
+        SupportedLanguages::Nodejs22 => "js",
+        SupportedLanguages::Go1_22 => "go",
+        SupportedLanguages::Java17 => "java",
+    };
+    let mut source_file_path = tmp_dir.join("source").with_extension(source_file_extension);
+
+    fs::write_to_file(&source_file_path, code).await?;
+    let (exec_path, args, seccomp_rule) = match language {
+        SupportedLanguages::C
+        | SupportedLanguages::Cpp
+        | SupportedLanguages::Cpp11
+        | SupportedLanguages::Cpp17
+        | SupportedLanguages::Cpp20 => {
+            // Compile the code
+            let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
+            let compile_output = if language == SupportedLanguages::C {
+                let gcc = AijConfig::get_binary_path("gcc").await?;
+                tokio::process::Command::new(gcc)
+                    .arg(&source_file_path)
+                    .arg("-o")
+                    .arg(&exec_path)
+                    .output()
+                    .await
+            } else {
+                let gpp = AijConfig::get_binary_path("g++").await?;
+                let mut cmd = tokio::process::Command::new(gpp);
+                match language {
+                    SupportedLanguages::Cpp11 => {
+                        cmd.arg("-std=c++11");
+                    }
+                    SupportedLanguages::Cpp17 => {
+                        cmd.arg("-std=c++17");
+                    }
+                    SupportedLanguages::Cpp20 => {
+                        cmd.arg("-std=c++20");
+                    }
+                    _ => {}
+                }
+                cmd.arg(&source_file_path)
+                    .arg("-o")
+                    .arg(&exec_path)
+                    .output()
+                    .await
+            }
+            .map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
+            if !compile_output.status.success() {
+                let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
+            }
+            (exec_path, vec![], judger::SeccompRuleName::CCpp)
+        }
+        SupportedLanguages::Python3_12 => {
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
+            let python3 = AijConfig::get_binary_path("python3").await?;
+            (
+                python3.to_string_lossy().to_string(),
+                vec![
+                    python3.to_string_lossy().to_string(),
+                    source_file_path.to_string_lossy().to_string(),
+                ],
+                judger::SeccompRuleName::Python,
+            )
+        }
+        SupportedLanguages::Nodejs22 => {
+            let nodejs = AijConfig::get_binary_path("node").await?;
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
+            (
+                nodejs.to_string_lossy().to_string(),
+                vec![
+                    nodejs.to_string_lossy().to_string(),
+                    source_file_path.to_string_lossy().to_string(),
+                ],
+                judger::SeccompRuleName::Node,
+            )
+        }
+        SupportedLanguages::Go1_22 => {
+            let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
+            let go_bin = AijConfig::get_binary_path("go").await?;
+            let compile_output = tokio::process::Command::new(go_bin)
+                .arg("build")
+                .arg("-o")
+                .arg(&exec_path)
+                .arg(&source_file_path)
+                .output()
+                .await
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
+            if !compile_output.status.success() {
+                let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
+            }
+            problem_config.problem_info.memory_limit_kb =
+                match problem_config.problem_info.memory_limit_kb {
+                    -1 => -1,
+                    m => m * 2,
+                };
+            (exec_path, vec![], judger::SeccompRuleName::Golang)
+        }
+        SupportedLanguages::Java17 => {
+            let new_source_file_path = source_file_path
+                .with_file_name("Main")
+                .with_extension("java");
+            fs::rename(&source_file_path, &new_source_file_path).await?;
+            source_file_path = new_source_file_path;
+            problem_config.problem_info.time_limit_ms =
+                match problem_config.problem_info.time_limit_ms {
+                    -1 => -1,
+                    m => m * 2,
+                };
+            let javac = AijConfig::get_binary_path("javac").await?;
+            let compile_output = tokio::process::Command::new(javac)
+                .arg(&source_file_path)
+                .output()
+                .await
+                .map_err(|e| {
+                    AijError::Judge(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "COMPILE_ERROR".to_string(),
+                        format!("Failed to compile source code: {}", e),
+                    )
+                })?;
+            if !compile_output.status.success() {
+                let stderr = String::from_utf8_lossy(&compile_output.stderr);
+                return Ok(JudgeResult::CompileError {
+                    detail: stderr.to_string(),
+                });
+            }
+            let mut args = vec![
+                "java".to_string(),
+                "-cp".to_string(),
+                tmp_dir.to_string_lossy().to_string(),
+                "Main".to_string(),
+            ];
+            if problem_config.problem_info.memory_limit_kb != -1 {
+                args.insert(
+                    1,
+                    format!("-Xmx{}m", problem_config.problem_info.memory_limit_kb / 512),
+                );
+            };
+            let java = AijConfig::get_binary_path("java").await?;
+            (
+                java.to_string_lossy().to_string(),
+                args,
+                judger::SeccompRuleName::Java,
+            )
+        }
+    };
+    let mut judge_config = problem_config.problem_info.to_judger_config();
+    judge_config.seccomp_rule_name = Some(seccomp_rule);
+    let mut out_vec = vec![];
+    for case in testcases {
+        let input_path = tmp_dir.join(format!("{}.in", case.id));
+        fs::write_to_file(&input_path, &case.r#in).await?;
+
+        let mut config = judge_config.clone();
+        config.exe_path = exec_path.clone();
+        config.args = args.clone();
+        config.input_path = input_path.to_string_lossy().to_string();
+        config.output_path = tmp_dir
+            .join(format!("{}.out", case.id))
+            .to_string_lossy()
+            .to_string();
+        config.error_path = tmp_dir
+            .join(format!("{}.err", case.id))
+            .to_string_lossy()
+            .to_string();
+        config.log_path = tmp_dir
+            .join(format!("{}.log", case.id))
+            .to_string_lossy()
+            .to_string();
+
+        let res = judger::run(&config, None).map_err(|e| {
+            AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "JUDGER_RUN_FAILED".to_string(),
+                format!("Judger run failed: {}", e),
+            )
+        })?;
+
+        let out_content = get_text_by_path(&config.output_path, None).await?;
+
+        let (sys, r#type) = match res.result {
+            judger::ErrorCode::Success => ("Success".to_string(), JudgeResultType::Accepted),
+            judger::ErrorCode::CpuTimeLimitExceeded | judger::ErrorCode::RealTimeLimitExceeded => (
+                "Time Limit Exceeded".to_string(),
+                JudgeResultType::TimeLimitExceeded,
+            ),
+            judger::ErrorCode::MemoryLimitExceeded => (
+                "Memory Limit Exceeded".to_string(),
+                JudgeResultType::MemoryLimitExceeded,
+            ),
+            judger::ErrorCode::RuntimeError => {
+                ("Runtime Error".to_string(), JudgeResultType::RuntimeError)
+            }
+            judger::ErrorCode::SystemError => {
+                ("System Error".to_string(), JudgeResultType::SystemError)
+            }
+            judger::ErrorCode::WrongAnswer(s) => (s, JudgeResultType::WrongAnswer),
+            _ => (
+                format!("Unexpected judger result: {:?}", res.result),
+                JudgeResultType::SystemError,
+            ),
+        };
+
+        out_vec.push(JudgeResultItem {
+            id: case.id,
+            time: res.cpu_time,
+            mem: res.memory,
+            sys,
+            r#in: case.r#in,
+            ans: String::new(),
+            out: out_content,
+            score: 0,
+            r#type,
+        });
+    }
+
+    Ok(JudgeResult::MaybeError {
+        results: out_vec,
+        subtask_configs: Vec::new(),
     })
 }
 

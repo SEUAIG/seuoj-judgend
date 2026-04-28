@@ -59,6 +59,15 @@ pub(crate) struct ProblemExample {
     pub(crate) description: String,
 }
 
+/// Problem example (input/output pair)
+#[derive(Deserialize)]
+pub(crate) struct OnlineCase {
+    /// Test case ID
+    pub(crate) id: i32,
+    /// Example input
+    pub(crate) r#in: String,
+}
+
 /// Problem configuration stored as TOML.
 /// This corresponds to the "配置数据 Schema".
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
