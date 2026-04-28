@@ -8,7 +8,8 @@ use crate::config::AijConfig;
 use crate::server::{
     delete_problem_by_id, delete_problem_file, edit_problem_by_id, get_problem_by_id,
     get_problem_config, get_problem_file, get_problem_tree, get_submission_file,
-    get_submission_tree, judge_problem_by_id, put_problem_config, upload_problem_data,
+    get_submission_tree, judge_problem_by_id, judge_problem_online_by_id, put_problem_config,
+    upload_problem_data,
 };
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -32,6 +33,7 @@ pub fn app() -> Router {
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/problem/{pid}", delete(delete_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))
+        .route("/judge/submission/online", post(judge_problem_online_by_id))
         .route("/judge/problem/edit", patch(edit_problem_by_id))
         .route("/judge/problem/data/{pid}", post(upload_problem_data))
         .route("/judge/problem/config/{pid}", get(get_problem_config))

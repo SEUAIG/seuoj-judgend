@@ -1,8 +1,10 @@
 use crate::config::AijConfig;
 use crate::error::AijError;
 use crate::error::Result;
-use crate::fs::delete_dir_by_submission_id;
+use crate::fs::{assert_problem_exists, delete_dir_by_submission_id};
+use crate::judger::judge_online;
 use crate::judger::{JudgeResult, SupportedLanguages, judge};
+use crate::schema::OnlineCase;
 use crate::schema::ProblemConfig;
 use crate::server::{AppJson, get_judge_semaphore};
 use axum::Json;
@@ -10,6 +12,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::Value;
 use serde_json::json;
 use tracing::{debug, error, info, warn};
 
@@ -23,6 +26,9 @@ pub(crate) struct JudgeRequest {
     pub(crate) code: String,
     #[serde(rename = "language")]
     pub(crate) language: SupportedLanguages,
+    #[serde(rename = "testcases")]
+    #[serde(default)]
+    pub(crate) testcases: Vec<OnlineCase>,
 }
 
 pub(crate) async fn judge_problem_by_id(
@@ -32,6 +38,9 @@ pub(crate) async fn judge_problem_by_id(
         "Received judge request: submission_id={}, problem_id={}, language={:?}",
         &payload.submission_id, &payload.problem_id, &payload.language
     );
+    assert_problem_exists(&payload.problem_id)
+        .await
+        .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
     let problem_config = ProblemConfig::from_pid(&payload.problem_id).await?;
     if problem_config.testcases.is_empty() {
         let message = format!("Problem {} has no test cases.", &payload.problem_id);
@@ -86,37 +95,7 @@ pub(crate) async fn judge_problem_by_id(
                 return;
             }
         };
-        let json_content = match res {
-            Ok(result) => {
-                info!("Judging completed: {:?}", result);
-                match result {
-                    JudgeResult::CompileError { detail } => json!({
-                        "status": "CompileError",
-                        "errorDetail": detail,
-                    }),
-                    JudgeResult::MaybeError {
-                        results,
-                        subtask_configs,
-                    } => {
-                        let score: i32 = if subtask_configs.is_empty() {
-                            results.iter().map(|r| r.score).sum()
-                        } else {
-                            subtask_configs.iter().map(|s| s.score).sum()
-                        };
-                        json!({
-                            "status": "Success",
-                            "resultDetail": results,
-                            "subtasks": subtask_configs,
-                            "score": score,
-                        })
-                    }
-                }
-            }
-            Err(e) => json!({
-                "status": "JudgendError",
-                "errorDetail": format!("Judging failed: {}", e),
-            }),
-        };
+        let json_content = parse_content_from_result(res);
         debug!(
             "Result to report: {}, submission_id={}",
             json_content, payload.submission_id
@@ -146,4 +125,73 @@ pub(crate) async fn judge_problem_by_id(
         "code": 0,
         "message": "Success",
     })))
+}
+
+pub(crate) async fn judge_problem_online_by_id(
+    AppJson(payload): AppJson<JudgeRequest>,
+) -> Result<impl IntoResponse> {
+    info!(
+        "Received online judge request: problem_id={}, language={:?}",
+        &payload.problem_id, &payload.language
+    );
+    assert_problem_exists(&payload.problem_id)
+        .await
+        .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
+    if payload.testcases.is_empty() {
+        let message = format!("Problem {} has no test cases.", &payload.problem_id);
+        error!("{}", message);
+        return Err(AijError::Request(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "NO_TEST_CASES".to_string(),
+            message,
+        ));
+    }
+    let res = judge_online(
+        payload.problem_id,
+        payload.code,
+        payload.language,
+        payload.submission_id.clone(),
+        payload.testcases,
+    )
+    .await;
+
+    Ok(Json(json!({
+        "code": 0,
+        "message": "Success",
+        "data": parse_content_from_result(res),
+    })))
+}
+
+fn parse_content_from_result(res: Result<JudgeResult>) -> Value {
+    match res {
+        Ok(result) => {
+            info!("Online judging completed: {:?}", result);
+            match result {
+                JudgeResult::CompileError { detail } => json!({
+                    "status": "CompileError",
+                    "errorDetail": detail,
+                }),
+                JudgeResult::MaybeError {
+                    results,
+                    subtask_configs,
+                } => {
+                    let score: i32 = if subtask_configs.is_empty() {
+                        results.iter().map(|r| r.score).sum()
+                    } else {
+                        subtask_configs.iter().map(|s| s.score).sum()
+                    };
+                    json!({
+                        "status": "Success",
+                        "resultDetail": results,
+                        "subtasks": subtask_configs,
+                        "score": score,
+                    })
+                }
+            }
+        }
+        Err(e) => json!({
+            "status": "JudgendError",
+            "errorDetail": format!("Judging failed: {}", e),
+        }),
+    }
 }
