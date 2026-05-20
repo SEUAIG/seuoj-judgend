@@ -19,6 +19,24 @@ pub(crate) use crate::judger::judge_result::{JudgeResult, JudgeResultItem, Judge
 use crate::judger::offline_cases::run_offline_cases;
 use crate::judger::online_cases::run_online_cases;
 pub(crate) use judger_helpers::compile;
+use tracing::warn;
+
+fn check_code_length(code: &str, max_code_length: i64) -> Option<JudgeResult> {
+    if max_code_length < 0 {
+        return None;
+    }
+    let max_length = max_code_length as usize;
+    if code.len() > max_length {
+        let message = format!(
+            "Code length {} exceeds maximum allowed length {}",
+            code.len(),
+            max_length
+        );
+        warn!("{}", message);
+        return Some(JudgeResult::CodeTooLong { detail: message });
+    }
+    None
+}
 
 /// Supported programming languages for the judger system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -41,6 +59,11 @@ pub(crate) async fn judge(
     submission_id: String,
 ) -> Result<JudgeResult> {
     let mut problem_config = ProblemConfig::from_pid(&pid).await?;
+    if let Some(code_too_long) =
+        check_code_length(&code, problem_config.problem_info.max_code_length)
+    {
+        return Ok(code_too_long);
+    }
     let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
     let (judge_config, exec_path, args) =
         match prepare_execution(&mut problem_config, &tmp_dir, code, language).await? {
@@ -73,6 +96,11 @@ pub(crate) async fn judge_online(
     testcases: Vec<OnlineCase>,
 ) -> Result<JudgeResult> {
     let mut problem_config = ProblemConfig::from_pid(&pid).await?;
+    if let Some(code_too_long) =
+        check_code_length(&code, problem_config.problem_info.max_code_length)
+    {
+        return Ok(code_too_long);
+    }
     let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
     let (judge_config, exec_path, args) =
         match prepare_execution(&mut problem_config, &tmp_dir, code, language).await? {

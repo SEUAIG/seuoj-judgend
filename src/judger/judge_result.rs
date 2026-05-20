@@ -53,6 +53,9 @@ pub(crate) enum JudgeResult {
     CompileError {
         detail: String,
     },
+    CodeTooLong {
+        detail: String,
+    },
     MaybeError {
         results: Vec<JudgeResultItem>,
         subtask_configs: Vec<SubtaskConfig>,
