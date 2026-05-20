@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::fs::get_dir_by_submission_id;
 use crate::schema::{OnlineCase, ProblemConfig};
 use serde::Deserialize;
+use strum::{Display, EnumIter};
 
 mod build_plan;
 mod case_judge;
@@ -39,17 +40,15 @@ fn check_code_length(code: &str, max_code_length: i64) -> Option<JudgeResult> {
 }
 
 /// Supported programming languages for the judger system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, EnumIter, Display)]
 pub(crate) enum SupportedLanguages {
     C,
     Cpp,
-    Cpp11,
-    Cpp17,
     Cpp20,
-    Python3_12,
-    Nodejs22,
-    Go1_22,
-    Java17,
+    Python,
+    Nodejs,
+    Go,
+    Java,
 }
 
 pub(crate) async fn judge(

@@ -17,11 +17,11 @@ cargo test submission         # 单个测试模块
 | 语言 | 枚举值 | 文件扩展名 | 备注 |
 |------|--------|-----------|------|
 | C | `C` | `.c` | gcc |
-| C++ | `Cpp` / `Cpp11` / `Cpp17` / `Cpp20` | `.cpp` | g++，默认 C++20 |
-| Python | `Python3_12` | `.py` | python3 |
-| Node.js | `Nodejs22` | `.js` | node |
-| Go | `Go1_22` | `.go` | go，内存限制 x2 |
-| Java | `Java17` | `.java` | javac + java，时间限制 x2 |
+| C++ | `Cpp` / `Cpp20` | `.cpp` | g++，默认 C++17 |
+| Python | `Python` | `.py` | python3 |
+| Node.js | `Nodejs` | `.js` | node |
+| Go | `Go` | `.go` | go，内存限制 x2 |
+| Java | `Java` | `.java` | javac + java，时间限制 x2 |
 
 > Python 和 Node.js 的时间限制也会 x2。
 

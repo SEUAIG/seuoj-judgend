@@ -26,24 +26,17 @@ pub(crate) async fn prepare_execution(
 ) -> Result<PrepareOutcome> {
     let source_file_extension = match language {
         SupportedLanguages::C => "c",
-        SupportedLanguages::Cpp
-        | SupportedLanguages::Cpp11
-        | SupportedLanguages::Cpp17
-        | SupportedLanguages::Cpp20 => "cpp",
-        SupportedLanguages::Python3_12 => "py",
-        SupportedLanguages::Nodejs22 => "js",
-        SupportedLanguages::Go1_22 => "go",
-        SupportedLanguages::Java17 => "java",
+        SupportedLanguages::Cpp | SupportedLanguages::Cpp20 => "cpp",
+        SupportedLanguages::Python => "py",
+        SupportedLanguages::Nodejs => "js",
+        SupportedLanguages::Go => "go",
+        SupportedLanguages::Java => "java",
     };
     let mut source_file_path = tmp_dir.join("source").with_extension(source_file_extension);
     fs::write_to_file(&source_file_path, code).await?;
 
     let (exec_path, args, seccomp_rule) = match language {
-        SupportedLanguages::C
-        | SupportedLanguages::Cpp
-        | SupportedLanguages::Cpp11
-        | SupportedLanguages::Cpp17
-        | SupportedLanguages::Cpp20 => {
+        SupportedLanguages::C | SupportedLanguages::Cpp | SupportedLanguages::Cpp20 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
             let compile_output = if language == SupportedLanguages::C {
                 let gcc = AijConfig::get_binary_path("gcc").await?;
@@ -56,17 +49,8 @@ pub(crate) async fn prepare_execution(
             } else {
                 let gpp = AijConfig::get_binary_path("g++").await?;
                 let mut cmd = tokio::process::Command::new(gpp);
-                match language {
-                    SupportedLanguages::Cpp11 => {
-                        cmd.arg("-std=c++11");
-                    }
-                    SupportedLanguages::Cpp17 => {
-                        cmd.arg("-std=c++17");
-                    }
-                    SupportedLanguages::Cpp20 => {
-                        cmd.arg("-std=c++20");
-                    }
-                    _ => {}
+                if language == SupportedLanguages::Cpp20 {
+                    cmd.arg("-std=c++20");
                 }
                 cmd.arg(&source_file_path)
                     .arg("-o")
@@ -87,7 +71,7 @@ pub(crate) async fn prepare_execution(
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
-        SupportedLanguages::Python3_12 => {
+        SupportedLanguages::Python => {
             problem_config.problem_info.time_limit_ms =
                 match problem_config.problem_info.time_limit_ms {
                     -1 => -1,
@@ -103,7 +87,7 @@ pub(crate) async fn prepare_execution(
                 judger::SeccompRuleName::Python,
             )
         }
-        SupportedLanguages::Nodejs22 => {
+        SupportedLanguages::Nodejs => {
             problem_config.problem_info.time_limit_ms =
                 match problem_config.problem_info.time_limit_ms {
                     -1 => -1,
@@ -119,7 +103,7 @@ pub(crate) async fn prepare_execution(
                 judger::SeccompRuleName::Node,
             )
         }
-        SupportedLanguages::Go1_22 => {
+        SupportedLanguages::Go => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
             let go_bin = AijConfig::get_binary_path("go").await?;
             let compile_output = tokio::process::Command::new(go_bin)
@@ -147,7 +131,7 @@ pub(crate) async fn prepare_execution(
                 };
             (exec_path, vec![], judger::SeccompRuleName::Golang)
         }
-        SupportedLanguages::Java17 => {
+        SupportedLanguages::Java => {
             let new_source_file_path = source_file_path
                 .with_file_name("Main")
                 .with_extension("java");

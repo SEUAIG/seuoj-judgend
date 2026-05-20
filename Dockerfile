@@ -6,7 +6,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 
 # 配置 Cargo 使用中科大镜像
 RUN mkdir -p /usr/local/cargo/ && \
-    echo '[source.crates-io]\nreplace-with = "ustc"\n\n[source.ustc]\nregistry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > /usr/local/cargo/config.toml
+    echo '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "sparse+https://rsproxy.cn/index/"' > /usr/local/cargo/config.toml
 
 # 安装 libseccomp 开发库
 RUN apt-get update && apt-get install -y \
@@ -39,12 +39,11 @@ RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list.d/u
     sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources
 
 # 更新源并安装所有运行所需的语言和工具
-# Ubuntu 24.04 默认提供：
 # - GCC/G++ 13
 # - Python 3.12
 # - OpenJDK 21
-# - Node.js 18+ (或通过官方源安装更高版本)
-# - Go 1.22+
+# - Go 1.22
+# - Node.js 18 (通过 nodejs 包)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libseccomp2 \
     gcc g++ \
