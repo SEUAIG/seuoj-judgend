@@ -132,6 +132,9 @@ pub(crate) struct ProblemInfo {
     /// Maximum memory in kilobytes (-1 for unlimited).
     #[serde(default = "default_memory_limit")]
     pub(crate) memory_limit_kb: i64,
+    /// Maximum code length in bytes (-1 for unlimited).
+    #[serde(default = "default_max_code_length")]
+    pub(crate) max_code_length: i64,
 }
 
 fn default_time_limit() -> i32 {
@@ -142,6 +145,10 @@ fn default_memory_limit() -> i64 {
     256 * 1024
 }
 
+fn default_max_code_length() -> i64 {
+    -1 // unlimited
+}
+
 impl Default for ProblemInfo {
     fn default() -> Self {
         Self {
@@ -149,6 +156,7 @@ impl Default for ProblemInfo {
             checker_type: CheckerType::default(),
             time_limit_ms: default_time_limit(),
             memory_limit_kb: default_memory_limit(),
+            max_code_length: default_max_code_length(),
         }
     }
 }

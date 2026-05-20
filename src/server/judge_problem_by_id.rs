@@ -42,6 +42,7 @@ pub(crate) async fn judge_problem_by_id(
         .await
         .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
     let problem_config = ProblemConfig::from_pid(&payload.problem_id).await?;
+    check_code_length(&payload.code, problem_config.problem_info.max_code_length)?;
     if problem_config.testcases.is_empty() {
         let message = format!("Problem {} has no test cases.", &payload.problem_id);
         error!("{}", message);
@@ -137,6 +138,8 @@ pub(crate) async fn judge_problem_online_by_id(
     assert_problem_exists(&payload.problem_id)
         .await
         .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
+    let problem_config = ProblemConfig::from_pid(&payload.problem_id).await?;
+    check_code_length(&payload.code, problem_config.problem_info.max_code_length)?;
     if payload.testcases.is_empty() {
         let message = format!("Problem {} has no test cases.", &payload.problem_id);
         error!("{}", message);
@@ -160,6 +163,27 @@ pub(crate) async fn judge_problem_online_by_id(
         "message": "Success",
         "data": parse_content_from_result(res),
     })))
+}
+
+fn check_code_length(code: &str, max_code_length: i64) -> Result<()> {
+    if max_code_length < 0 {
+        return Ok(());
+    }
+    let max_length = max_code_length as usize;
+    if code.len() > max_length {
+        let message = format!(
+            "Code length {} exceeds maximum allowed length {}",
+            code.len(),
+            max_length
+        );
+        warn!("{}", message);
+        return Err(AijError::Request(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "CODE_TOO_LONG".to_string(),
+            message,
+        ));
+    }
+    Ok(())
 }
 
 fn parse_content_from_result(res: Result<JudgeResult>) -> Value {
