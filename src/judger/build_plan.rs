@@ -1,15 +1,12 @@
 // Build execution plan from submission source and selected language.
 use crate::config::AijConfig;
-use crate::error::{AijError, Result};
+use crate::error::Result;
 use crate::fs;
 use crate::judger::SupportedLanguages;
+use crate::judger::judger_helpers::{CompileResult, run_compile_with_limit};
 use crate::schema::ProblemConfig;
-use axum::http::StatusCode;
 use std::path::Path;
-use std::process::Output;
-use std::time::Duration;
 use tokio::process::Command;
-use tracing::warn;
 
 pub(crate) struct ExecutionPlan {
     pub(crate) judge_config: judger::Config,
@@ -20,70 +17,6 @@ pub(crate) struct ExecutionPlan {
 pub(crate) enum PrepareOutcome {
     Plan(Box<ExecutionPlan>),
     CompileError(String),
-    Success(()),
-}
-
-async fn run_compile_with_limit(mut cmd: Command) -> Result<PrepareOutcome> {
-    let config = AijConfig::get();
-    let time_limit = Duration::from_millis(config.compile_time_limit_ms);
-
-    unsafe {
-        cmd.pre_exec(move || {
-            let limit = config.compile_memory_limit_kb * 1024;
-            let rlimit = libc::rlimit {
-                rlim_cur: limit,
-                rlim_max: limit,
-            };
-            libc::setrlimit(libc::RLIMIT_AS, &rlimit);
-            Ok(())
-        });
-    }
-
-    match tokio::time::timeout(time_limit, cmd.output()).await {
-        Ok(result) => {
-            let output = result.map_err(|e| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "COMPILE_ERROR".to_string(),
-                    format!("Failed to compile source code: {}", e),
-                )
-            })?;
-            if let Some(err) = check_compile_output(&output) {
-                return Ok(err);
-            }
-            Ok(PrepareOutcome::Success(()))
-        }
-        Err(_) => {
-            warn!(
-                "Compilation timed out after {}ms",
-                config.compile_time_limit_ms
-            );
-            Ok(PrepareOutcome::CompileError(format!(
-                "Compilation timed out after {}ms",
-                config.compile_time_limit_ms
-            )))
-        }
-    }
-}
-
-fn check_compile_output(output: &Output) -> Option<PrepareOutcome> {
-    if output.status.success() {
-        return None;
-    }
-    let max_error_len = AijConfig::get().compile_error_truncate_length;
-    let stderr_truncated = if output.stderr.len() > max_error_len {
-        &output.stderr[0..max_error_len]
-    } else {
-        &output.stderr
-    };
-    let mut stderr = String::from_utf8_lossy(stderr_truncated).to_string();
-    if output.stderr.len() > max_error_len {
-        stderr = format!(
-            "\n\n[System Notice]: Error output truncated to {} bytes to avoid overwhelming the server.",
-            max_error_len
-        ) + &stderr;
-    }
-    Some(PrepareOutcome::CompileError(stderr))
 }
 
 pub(crate) async fn prepare_execution(
@@ -125,9 +58,8 @@ pub(crate) async fn prepare_execution(
                 run_compile_with_limit(cmd).await
             }?;
             match result {
-                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
-                PrepareOutcome::Success(_) => {}
-                PrepareOutcome::Plan(_) => unreachable!(),
+                CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                CompileResult::Success => {}
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
@@ -172,9 +104,8 @@ pub(crate) async fn prepare_execution(
                 .arg(&exec_path)
                 .arg(&source_file_path);
             match run_compile_with_limit(cmd).await? {
-                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
-                PrepareOutcome::Success(_) => {}
-                PrepareOutcome::Plan(_) => unreachable!(),
+                CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                CompileResult::Success => {}
             }
             problem_config.problem_info.memory_limit_kb =
                 match problem_config.problem_info.memory_limit_kb {
@@ -198,9 +129,8 @@ pub(crate) async fn prepare_execution(
             let mut cmd = Command::new(javac);
             cmd.arg(&source_file_path);
             match run_compile_with_limit(cmd).await? {
-                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
-                PrepareOutcome::Success(_) => {}
-                PrepareOutcome::Plan(_) => unreachable!(),
+                CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                CompileResult::Success => {}
             }
             let mut args = vec![
                 "java".to_string(),

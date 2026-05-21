@@ -70,7 +70,6 @@ pub(crate) async fn judge(
             PrepareOutcome::CompileError(detail) => {
                 return Ok(JudgeResult::CompileError { detail });
             }
-            PrepareOutcome::Success(_) => unreachable!(),
         };
     let (out_vec, subtasks) = run_offline_cases(
         &pid,
@@ -108,7 +107,6 @@ pub(crate) async fn judge_online(
             PrepareOutcome::CompileError(detail) => {
                 return Ok(JudgeResult::CompileError { detail });
             }
-            PrepareOutcome::Success(_) => unreachable!(),
         };
     run_online_cases(testcases, &judge_config, &exec_path, &args, &tmp_dir).await
 }

@@ -6,7 +6,10 @@ use crate::schema::SubtaskConfig;
 use reqwest::StatusCode;
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::error;
+use std::process::Output;
+use std::time::Duration;
+use tokio::process::Command;
+use tracing::{error, warn};
 
 /// Make the file at `path` executable by adding execute permissions for user, group, and others.
 pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> Result<()> {
@@ -45,6 +48,75 @@ pub(crate) async fn chmod_plus_x(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+pub(crate) enum CompileResult {
+    Success,
+    CompileError(String),
+}
+
+pub(crate) async fn run_compile_with_limit(mut cmd: Command) -> Result<CompileResult> {
+    let config = AijConfig::get();
+    let time_limit = Duration::from_millis(config.compile_time_limit_ms);
+
+    unsafe {
+        cmd.pre_exec(move || {
+            let limit = config.compile_memory_limit_kb * 1024;
+            let rlimit = libc::rlimit {
+                rlim_cur: limit,
+                rlim_max: limit,
+            };
+            libc::setrlimit(libc::RLIMIT_AS, &rlimit);
+            Ok(())
+        });
+    }
+
+    match tokio::time::timeout(time_limit, cmd.output()).await {
+        Ok(result) => {
+            let output = result.map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
+            if let Some(err) = check_compile_output(&output) {
+                return Ok(err);
+            }
+            Ok(CompileResult::Success)
+        }
+        Err(_) => {
+            warn!(
+                "Compilation timed out after {}ms",
+                config.compile_time_limit_ms
+            );
+            Ok(CompileResult::CompileError(format!(
+                "Compilation timed out after {}ms",
+                config.compile_time_limit_ms
+            )))
+        }
+    }
+}
+
+fn check_compile_output(output: &Output) -> Option<CompileResult> {
+    if output.status.success() {
+        return None;
+    }
+    let max_error_len = AijConfig::get().compile_error_truncate_length;
+    let stderr_truncated = if output.stderr.len() > max_error_len {
+        &output.stderr[0..max_error_len]
+    } else {
+        &output.stderr
+    };
+    let mut stderr = String::new();
+    if output.stderr.len() > max_error_len {
+        stderr.push_str(&format!(
+            "\n\n[System Notice]: Error output truncated to {} bytes to avoid overwhelming the server.",
+            max_error_len
+        ));
+    }
+    stderr.push_str(String::from_utf8_lossy(stderr_truncated).as_ref());
+    Some(CompileResult::CompileError(stderr))
+}
+
 #[allow(dead_code)]
 pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
     let path_without_ext = path.as_ref().with_extension("");
@@ -52,52 +124,34 @@ pub(crate) async fn compile(path: impl AsRef<Path>) -> Result<()> {
         return Ok(());
     }
     let testlib_path = &AijConfig::get().testlib_dir;
-    let output = tokio::process::Command::new("g++")
-        .arg(path.as_ref())
+    let mut cmd = Command::new("g++");
+    cmd.arg(path.as_ref())
         .arg("-o")
         .arg(path.as_ref().with_extension(""))
         .arg("-O2")
         .arg("-static")
         .arg("-std=c++23")
         .arg("-I")
-        .arg(testlib_path)
-        .output()
-        .await
-        .map_err(|e| {
-            let message = if e.kind() == std::io::ErrorKind::NotFound {
-                "g++ not found. Please ensure g++ is installed and in the system PATH.".to_string()
-            } else {
-                e.to_string()
-            };
-            error!("Compilation error: {}", message);
-            AijError::Request(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "COMPILATION_EXECUTION_FAILED".to_string(),
-                format!(
-                    "Failed to execute g++ for {}: {}",
-                    path.as_ref().display(),
-                    message
-                ),
-            )
-        })?;
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr);
-        error!(
-            "Compilation failed for {}: {}",
-            path.as_ref().display(),
-            message
-        );
-        return Err(AijError::Request(
-            StatusCode::BAD_REQUEST,
-            "COMPILATION_FAILED".to_string(),
-            format!(
+        .arg(testlib_path);
+    match run_compile_with_limit(cmd).await? {
+        CompileResult::Success => Ok(()),
+        CompileResult::CompileError(message) => {
+            error!(
                 "Compilation failed for {}: {}",
                 path.as_ref().display(),
                 message
-            ),
-        ));
+            );
+            Err(AijError::Request(
+                StatusCode::BAD_REQUEST,
+                "COMPILATION_FAILED".to_string(),
+                format!(
+                    "Compilation failed for {}: {}",
+                    path.as_ref().display(),
+                    message
+                ),
+            ))
+        }
     }
-    Ok(())
 }
 
 pub(crate) fn get_topo_order(subtasks: &[SubtaskConfig]) -> Result<Vec<i32>> {
