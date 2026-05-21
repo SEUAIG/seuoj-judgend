@@ -51,6 +51,15 @@ pub struct AijConfig {
     /// Truncate length of long outputs
     #[serde(default = "default_output_truncate_length")]
     pub output_truncate_length: usize,
+    /// Compile time limit in milliseconds
+    #[serde(default = "default_compile_time_limit_ms")]
+    pub compile_time_limit_ms: u64,
+    /// Compile memory limit in kilobytes
+    #[serde(default = "default_compile_memory_limit_kb")]
+    pub compile_memory_limit_kb: u64,
+    /// Compile Error Truncate Length
+    #[serde(default = "default_compile_error_truncate_length")]
+    pub compile_error_truncate_length: usize,
     /// List of available toolchains
     #[serde(default = "default_toolchains")]
     pub toolchains: Vec<String>,
@@ -105,6 +114,18 @@ fn default_save_submissions() -> bool {
 
 fn default_output_truncate_length() -> usize {
     200
+}
+
+fn default_compile_time_limit_ms() -> u64 {
+    5000 // 5 seconds
+}
+
+fn default_compile_memory_limit_kb() -> u64 {
+    524288 // 512 MB
+}
+
+fn default_compile_error_truncate_length() -> usize {
+    1000
 }
 
 fn default_toolchains() -> Vec<String> {

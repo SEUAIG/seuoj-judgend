@@ -24,6 +24,7 @@ tempfile = "3.26.0"
 futures-util = "0.3.32"
 config = "0.15.23"
 strum = { version = "0.28.0", features = ["derive"] }
+libc = "0.2"
 [dev-dependencies]
 axum-test = "20.0.0"
 serial_test = "3.4.0"

@@ -6,6 +6,10 @@ use crate::judger::SupportedLanguages;
 use crate::schema::ProblemConfig;
 use axum::http::StatusCode;
 use std::path::Path;
+use std::process::Output;
+use std::time::Duration;
+use tokio::process::Command;
+use tracing::warn;
 
 pub(crate) struct ExecutionPlan {
     pub(crate) judge_config: judger::Config,
@@ -16,6 +20,70 @@ pub(crate) struct ExecutionPlan {
 pub(crate) enum PrepareOutcome {
     Plan(Box<ExecutionPlan>),
     CompileError(String),
+    Success(()),
+}
+
+async fn run_compile_with_limit(mut cmd: Command) -> Result<PrepareOutcome> {
+    let config = AijConfig::get();
+    let time_limit = Duration::from_millis(config.compile_time_limit_ms);
+
+    unsafe {
+        cmd.pre_exec(move || {
+            let limit = config.compile_memory_limit_kb * 1024;
+            let rlimit = libc::rlimit {
+                rlim_cur: limit,
+                rlim_max: limit,
+            };
+            libc::setrlimit(libc::RLIMIT_AS, &rlimit);
+            Ok(())
+        });
+    }
+
+    match tokio::time::timeout(time_limit, cmd.output()).await {
+        Ok(result) => {
+            let output = result.map_err(|e| {
+                AijError::Judge(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "COMPILE_ERROR".to_string(),
+                    format!("Failed to compile source code: {}", e),
+                )
+            })?;
+            if let Some(err) = check_compile_output(&output) {
+                return Ok(err);
+            }
+            Ok(PrepareOutcome::Success(()))
+        }
+        Err(_) => {
+            warn!(
+                "Compilation timed out after {}ms",
+                config.compile_time_limit_ms
+            );
+            Ok(PrepareOutcome::CompileError(format!(
+                "Compilation timed out after {}ms",
+                config.compile_time_limit_ms
+            )))
+        }
+    }
+}
+
+fn check_compile_output(output: &Output) -> Option<PrepareOutcome> {
+    if output.status.success() {
+        return None;
+    }
+    let max_error_len = AijConfig::get().compile_error_truncate_length;
+    let stderr_truncated = if output.stderr.len() > max_error_len {
+        &output.stderr[0..max_error_len]
+    } else {
+        &output.stderr
+    };
+    let mut stderr = String::from_utf8_lossy(stderr_truncated).to_string();
+    if output.stderr.len() > max_error_len {
+        stderr = format!(
+            "\n\n[System Notice]: Error output truncated to {} bytes to avoid overwhelming the server.",
+            max_error_len
+        ) + &stderr;
+    }
+    Some(PrepareOutcome::CompileError(stderr))
 }
 
 pub(crate) async fn prepare_execution(
@@ -38,36 +106,28 @@ pub(crate) async fn prepare_execution(
     let (exec_path, args, seccomp_rule) = match language {
         SupportedLanguages::C | SupportedLanguages::Cpp | SupportedLanguages::Cpp20 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
-            let compile_output = if language == SupportedLanguages::C {
+            let result = if language == SupportedLanguages::C {
                 let gcc = AijConfig::get_binary_path("gcc").await?;
-                tokio::process::Command::new(gcc)
+                let mut cmd = Command::new(gcc);
+                cmd.arg("-O2")
                     .arg(&source_file_path)
                     .arg("-o")
-                    .arg(&exec_path)
-                    .output()
-                    .await
+                    .arg(&exec_path);
+                run_compile_with_limit(cmd).await
             } else {
                 let gpp = AijConfig::get_binary_path("g++").await?;
-                let mut cmd = tokio::process::Command::new(gpp);
+                let mut cmd = Command::new(gpp);
+                cmd.arg("-O2").arg("-ftemplate-depth=1024");
                 if language == SupportedLanguages::Cpp20 {
                     cmd.arg("-std=c++20");
                 }
-                cmd.arg(&source_file_path)
-                    .arg("-o")
-                    .arg(&exec_path)
-                    .output()
-                    .await
-            }
-            .map_err(|e| {
-                AijError::Judge(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "COMPILE_ERROR".to_string(),
-                    format!("Failed to compile source code: {}", e),
-                )
-            })?;
-            if !compile_output.status.success() {
-                let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(PrepareOutcome::CompileError(stderr.to_string()));
+                cmd.arg(&source_file_path).arg("-o").arg(&exec_path);
+                run_compile_with_limit(cmd).await
+            }?;
+            match result {
+                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                PrepareOutcome::Success(_) => {}
+                PrepareOutcome::Plan(_) => unreachable!(),
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
         }
@@ -106,23 +166,15 @@ pub(crate) async fn prepare_execution(
         SupportedLanguages::Go => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
             let go_bin = AijConfig::get_binary_path("go").await?;
-            let compile_output = tokio::process::Command::new(go_bin)
-                .arg("build")
+            let mut cmd = Command::new(go_bin);
+            cmd.arg("build")
                 .arg("-o")
                 .arg(&exec_path)
-                .arg(&source_file_path)
-                .output()
-                .await
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
-            if !compile_output.status.success() {
-                let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(PrepareOutcome::CompileError(stderr.to_string()));
+                .arg(&source_file_path);
+            match run_compile_with_limit(cmd).await? {
+                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                PrepareOutcome::Success(_) => {}
+                PrepareOutcome::Plan(_) => unreachable!(),
             }
             problem_config.problem_info.memory_limit_kb =
                 match problem_config.problem_info.memory_limit_kb {
@@ -143,20 +195,12 @@ pub(crate) async fn prepare_execution(
                     m => m * 2,
                 };
             let javac = AijConfig::get_binary_path("javac").await?;
-            let compile_output = tokio::process::Command::new(javac)
-                .arg(&source_file_path)
-                .output()
-                .await
-                .map_err(|e| {
-                    AijError::Judge(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "COMPILE_ERROR".to_string(),
-                        format!("Failed to compile source code: {}", e),
-                    )
-                })?;
-            if !compile_output.status.success() {
-                let stderr = String::from_utf8_lossy(&compile_output.stderr);
-                return Ok(PrepareOutcome::CompileError(stderr.to_string()));
+            let mut cmd = Command::new(javac);
+            cmd.arg(&source_file_path);
+            match run_compile_with_limit(cmd).await? {
+                PrepareOutcome::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                PrepareOutcome::Success(_) => {}
+                PrepareOutcome::Plan(_) => unreachable!(),
             }
             let mut args = vec![
                 "java".to_string(),

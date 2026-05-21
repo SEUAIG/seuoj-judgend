@@ -37,6 +37,7 @@ dependencies = [
  "config",
  "futures-util",
  "judger",
+ "libc",
  "regex",
  "reqwest",
  "serde",
