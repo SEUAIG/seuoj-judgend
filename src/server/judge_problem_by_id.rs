@@ -178,8 +178,11 @@ fn parse_content_from_result(res: Result<JudgeResult>) -> Value {
                 JudgeResult::MaybeError {
                     results,
                     subtask_configs,
+                    total_score,
                 } => {
-                    let score: i32 = if subtask_configs.is_empty() {
+                    let score: i32 = if let Some(total) = total_score {
+                        total
+                    } else if subtask_configs.is_empty() {
                         results.iter().map(|r| r.score).sum()
                     } else {
                         subtask_configs.iter().map(|s| s.score).sum()
