@@ -71,7 +71,7 @@ pub(crate) async fn judge(
                 return Ok(JudgeResult::CompileError { detail });
             }
         };
-    let (out_vec, subtasks) = run_offline_cases(
+    let (out_vec, subtasks, total_score) = run_offline_cases(
         &pid,
         &submission_id,
         &problem_config,
@@ -84,6 +84,7 @@ pub(crate) async fn judge(
     Ok(JudgeResult::MaybeError {
         results: out_vec,
         subtask_configs: subtasks,
+        total_score,
     })
 }
 

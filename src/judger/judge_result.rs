@@ -59,5 +59,7 @@ pub(crate) enum JudgeResult {
     MaybeError {
         results: Vec<JudgeResultItem>,
         subtask_configs: Vec<SubtaskConfig>,
+        /// 无 subtask 时，run_weighted_cases 预计算的加权总分（避免 i32 截断）
+        total_score: Option<i32>,
     },
 }

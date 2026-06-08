@@ -15,7 +15,7 @@ pub(crate) async fn run_offline_cases(
     exec_path: &str,
     args: &[String],
     tmp_dir: &std::path::Path,
-) -> Result<(Vec<JudgeResultItem>, Vec<SubtaskConfig>)> {
+) -> Result<(Vec<JudgeResultItem>, Vec<SubtaskConfig>, Option<i32>)> {
     let mut out_vec = vec![];
     let problem_type = problem_config.problem_info.problem_type;
     let checker_type = problem_config.problem_info.checker_type;
@@ -83,7 +83,7 @@ pub(crate) async fn run_offline_cases(
             apply_subtask_score(sub_id, &scores, &mut subtasks)?;
         }
     } else {
-        run_weighted_cases(
+        let total_score = run_weighted_cases(
             pid,
             submission_id,
             problem_config,
@@ -97,9 +97,10 @@ pub(crate) async fn run_offline_cases(
             &mut out_vec,
         )
         .await?;
+        return Ok((out_vec, subtasks, Some(total_score)));
     }
 
-    Ok((out_vec, subtasks))
+    Ok((out_vec, subtasks, None))
 }
 
 fn apply_subtask_score(sub_id: i32, scores: &[i32], subtasks: &mut [SubtaskConfig]) -> Result<()> {
@@ -156,7 +157,7 @@ async fn run_weighted_cases(
     args: &[String],
     tmp_dir: &std::path::Path,
     out_vec: &mut Vec<JudgeResultItem>,
-) -> Result<()> {
+) -> Result<i32> {
     let sum_weight: i32 = problem_config.testcases.iter().map(|s| s.weight).sum();
     if sum_weight != 100 {
         return Err(AijError::Judge(
@@ -168,6 +169,8 @@ async fn run_weighted_cases(
             ),
         ));
     }
+    // 用 f64 累积加权总分，避免 i32 除法截断（每个测试点保留原始 score 0-100）
+    let mut total_score: f64 = 0.0;
     for case_config in &problem_config.testcases {
         let mut res = judge_single_case(
             case_config,
@@ -179,8 +182,8 @@ async fn run_weighted_cases(
             tmp_dir,
         )
         .await?;
-        res.score = (res.score * case_config.weight) / 100;
+        total_score += res.score as f64 * case_config.weight as f64 / 100.0;
         out_vec.push(res);
     }
-    Ok(())
+    Ok(total_score.round() as i32)
 }

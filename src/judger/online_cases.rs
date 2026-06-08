@@ -55,5 +55,6 @@ pub(crate) async fn run_online_cases(
     Ok(JudgeResult::MaybeError {
         results: out_vec,
         subtask_configs: Vec::new(),
+        total_score: None,
     })
 }
