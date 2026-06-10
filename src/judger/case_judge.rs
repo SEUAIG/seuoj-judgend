@@ -164,6 +164,7 @@ async fn build_case_result(ctx: CaseResultContext<'_>) -> Result<JudgeResultItem
                     ctx.custom_modules
                         .as_ref()
                         .and_then(|m| m.checker_path.as_deref()),
+                    ctx.res.cpu_time as u64,
                 )
                 .await?
                 {

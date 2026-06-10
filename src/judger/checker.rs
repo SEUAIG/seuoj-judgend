@@ -22,11 +22,20 @@ pub(crate) async fn check(
     ans_path: impl AsRef<Path>,
     checker_type: CheckerType,
     checker_path: Option<&str>,
+    time_ms: u64,
 ) -> Result<CheckerResult> {
     Ok(match checker_type {
         CheckerType::Standard => standard_checker(problem_id, output_path, ans_path).await?,
         CheckerType::Special => {
-            special_checker(problem_id, input_path, output_path, ans_path, checker_path).await?
+            special_checker(
+                problem_id,
+                input_path,
+                output_path,
+                ans_path,
+                checker_path,
+                time_ms,
+            )
+            .await?
         }
         CheckerType::Interactor => {
             let message = "Interactor problem should not be checked with checker";

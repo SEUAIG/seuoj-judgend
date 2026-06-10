@@ -12,6 +12,7 @@ pub(crate) async fn special_checker(
     output_path: impl AsRef<Path>,
     ans_path: impl AsRef<Path>,
     checker_path: Option<&str>,
+    time_ms: u64,
 ) -> crate::error::Result<CheckerResult> {
     {
         info!("Using special checker for problem {}", problem_id.as_ref());
@@ -56,6 +57,7 @@ pub(crate) async fn special_checker(
             .arg(input_path.as_ref())
             .arg(output_path.as_ref())
             .arg(ans_path.as_ref())
+            .arg(time_ms.to_string())
             .output()
             .await
             .map_err(|e| {
@@ -122,7 +124,7 @@ mod tests {
         let output_path = "assets/problems/test01/data/1.ans";
         let ans_path = "assets/problems/test01/data/1.ans";
         let res =
-            super::special_checker("test01", input_path, output_path, ans_path, Some("checker"))
+            super::special_checker("test01", input_path, output_path, ans_path, Some("checker"), 0)
                 .await
                 .unwrap();
         assert!(matches!(res, super::CheckerResult::Accepted));
