@@ -229,6 +229,14 @@ pub(crate) struct CustomModules {
     /// Path to the Interactor source/binary (relative to problem directory)
     #[serde(default)]
     pub(crate) interactor_path: Option<String>,
+    /// Paths to grader sources/headers (relative to problem directory).
+    ///
+    /// Unlike checker/interactor, these are NOT compiled standalone: they are
+    /// copied into the submission tmp dir and compiled together with the
+    /// submitted source, so the problem can hand the contestant a function-style
+    /// (IOI grader) interface instead of plain stdin/stdout.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) grader_paths: Vec<String>,
 }
 
 /// Type of the problem

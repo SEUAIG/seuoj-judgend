@@ -1,11 +1,12 @@
 // Build execution plan from submission source and selected language.
 use crate::config::AijConfig;
-use crate::error::Result;
+use crate::error::{AijError, Result};
 use crate::fs;
 use crate::judger::SupportedLanguages;
 use crate::judger::judger_helpers::{CompileResult, run_compile_with_limit};
 use crate::schema::ProblemConfig;
-use std::path::Path;
+use axum::http::StatusCode;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 pub(crate) struct ExecutionPlan {
@@ -20,11 +21,31 @@ pub(crate) enum PrepareOutcome {
 }
 
 pub(crate) async fn prepare_execution(
+    pid: &str,
     problem_config: &mut ProblemConfig,
     tmp_dir: &Path,
     code: String,
     language: SupportedLanguages,
 ) -> Result<PrepareOutcome> {
+    let grader_paths = problem_config
+        .custom_modules
+        .as_ref()
+        .map(|m| m.grader_paths.clone())
+        .unwrap_or_default();
+    // Graders are linked into the submission, which only the compiled C/C++
+    // pipeline knows how to do. Reject other languages through the compile-error
+    // channel so the contestant sees why instead of a bare system error.
+    if !grader_paths.is_empty()
+        && !matches!(
+            language,
+            SupportedLanguages::C | SupportedLanguages::Cpp | SupportedLanguages::Cpp20
+        )
+    {
+        return Ok(PrepareOutcome::CompileError(format!(
+            "本题通过 grader 编译，目前仅支持 C / C++，当前提交语言：{language}"
+        )));
+    }
+
     let source_file_extension = match language {
         SupportedLanguages::C => "c",
         SupportedLanguages::Cpp | SupportedLanguages::Cpp20 => "cpp",
@@ -39,13 +60,21 @@ pub(crate) async fn prepare_execution(
     let (exec_path, args, seccomp_rule) = match language {
         SupportedLanguages::C | SupportedLanguages::Cpp | SupportedLanguages::Cpp20 => {
             let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
+            // Problem-provided grader sources are compiled together with the
+            // submission, so the contestant only implements the required
+            // functions. Headers just land in tmp_dir and are found via `-I`.
+            let extra_sources =
+                stage_graders(pid, tmp_dir, &grader_paths, &source_file_path).await?;
             let result = if language == SupportedLanguages::C {
                 let gcc = AijConfig::get_binary_path("gcc").await?;
                 let mut cmd = Command::new(gcc);
-                cmd.arg("-O2")
-                    .arg(&source_file_path)
-                    .arg("-o")
-                    .arg(&exec_path);
+                cmd.arg("-O2");
+                if !grader_paths.is_empty() {
+                    cmd.arg("-I").arg(tmp_dir);
+                }
+                cmd.arg(&source_file_path);
+                cmd.args(&extra_sources);
+                cmd.arg("-o").arg(&exec_path);
                 run_compile_with_limit(cmd).await
             } else {
                 let gpp = AijConfig::get_binary_path("g++").await?;
@@ -54,7 +83,12 @@ pub(crate) async fn prepare_execution(
                 if language == SupportedLanguages::Cpp20 {
                     cmd.arg("-std=c++20");
                 }
-                cmd.arg(&source_file_path).arg("-o").arg(&exec_path);
+                if !grader_paths.is_empty() {
+                    cmd.arg("-I").arg(tmp_dir);
+                }
+                cmd.arg(&source_file_path);
+                cmd.args(&extra_sources);
+                cmd.arg("-o").arg(&exec_path);
                 run_compile_with_limit(cmd).await
             }?;
             match result {
@@ -182,4 +216,47 @@ pub(crate) async fn prepare_execution(
         exec_path,
         args,
     })))
+}
+
+
+/// Copy the problem's grader files into the submission tmp dir, returning the
+/// ones that are translation units and therefore have to be handed to the
+/// compiler alongside the submitted source.
+///
+/// Headers need no further handling: `prepare_execution` puts `tmp_dir` on
+/// the include path, so `#include "foo.h"` from the submission resolves to
+/// the staged copy.
+async fn stage_graders(
+    pid: &str,
+    tmp_dir: &Path,
+    grader_paths: &[String],
+    source_file_path: &Path,
+) -> Result<Vec<PathBuf>> {
+    let mut extra_sources = Vec::new();
+    for rel_path in grader_paths {
+        let src = fs::get_path_by_pid_name(pid, format!("data/{rel_path}"), true).await?;
+        let file_name = Path::new(rel_path).file_name().ok_or_else(|| {
+            AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INVALID_GRADER_PATH".to_string(),
+                format!("Grader path has no file name: {rel_path}"),
+            )
+        })?;
+        let dst = tmp_dir.join(file_name);
+        if dst == source_file_path {
+            return Err(AijError::Judge(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "GRADER_NAME_CONFLICT".to_string(),
+                format!("Grader file {rel_path} would overwrite the submitted source"),
+            ));
+        }
+        fs::copy(&src, &dst).await?;
+        if matches!(
+            dst.extension().and_then(|e| e.to_str()),
+            Some("c" | "cpp" | "cc" | "cxx")
+        ) {
+            extra_sources.push(dst);
+        }
+    }
+    Ok(extra_sources)
 }

@@ -65,7 +65,7 @@ pub(crate) async fn judge(
     }
     let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
     let (judge_config, exec_path, args) =
-        match prepare_execution(&mut problem_config, &tmp_dir, code, language).await? {
+        match prepare_execution(&pid, &mut problem_config, &tmp_dir, code, language).await? {
             PrepareOutcome::Plan(plan) => (plan.judge_config, plan.exec_path, plan.args),
             PrepareOutcome::CompileError(detail) => {
                 return Ok(JudgeResult::CompileError { detail });
@@ -103,7 +103,7 @@ pub(crate) async fn judge_online(
     }
     let tmp_dir = get_dir_by_submission_id(&submission_id, true).await?;
     let (judge_config, exec_path, args) =
-        match prepare_execution(&mut problem_config, &tmp_dir, code, language).await? {
+        match prepare_execution(&pid, &mut problem_config, &tmp_dir, code, language).await? {
             PrepareOutcome::Plan(plan) => (plan.judge_config, plan.exec_path, plan.args),
             PrepareOutcome::CompileError(detail) => {
                 return Ok(JudgeResult::CompileError { detail });

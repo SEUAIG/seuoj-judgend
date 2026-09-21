@@ -469,6 +469,26 @@ pub(crate) async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Resu
         })
 }
 
+pub(crate) async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
+    tokio::fs::copy(from.as_ref(), to.as_ref())
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            let message = format!(
+                "Failed to copy from {} to {}: {}",
+                from.as_ref().to_string_lossy(),
+                to.as_ref().to_string_lossy(),
+                e
+            );
+            warn!("{}", message);
+            AijError::FileSystem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "COPY_FAILED".to_string(),
+                message,
+            )
+        })
+}
+
 pub(crate) async fn delete_file(path: impl AsRef<Path>) -> Result<()> {
     if path.as_ref().exists() {
         tokio::fs::remove_file(path.as_ref()).await.map_err(|e| {

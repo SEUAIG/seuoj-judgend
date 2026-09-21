@@ -75,6 +75,42 @@ pub(crate) async fn put_problem_config(
         _ => {}
     }
 
+    // Graders are orthogonal to the problem type: a Standard problem can hand
+    // out a function-style interface just as well as an Interactive one. They
+    // are deliberately NOT compiled here -- they only make sense linked
+    // together with a submission, which happens in `prepare_execution`.
+    if let Some(custom_modules) = &problem_config.custom_modules {
+        let mut seen_names = HashSet::new();
+        for grader_path in &custom_modules.grader_paths {
+            fs::validate_filename(grader_path)?;
+            let _ =
+                fs::get_path_by_pid_name(&pid, format!("data/{grader_path}"), true).await?;
+            let file_name = std::path::Path::new(grader_path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            if file_name.starts_with("source.") {
+                return Err(crate::error::AijError::Request(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "GRADER_NAME_CONFLICT".to_string(),
+                    format!(
+                        "Grader file '{grader_path}' would overwrite the submitted source file; rename it to something other than 'source.*'"
+                    ),
+                ));
+            }
+            if !seen_names.insert(file_name.clone()) {
+                return Err(crate::error::AijError::Request(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "DUPLICATE_GRADER_NAME".to_string(),
+                    format!(
+                        "Two grader files share the base name '{file_name}'; they would overwrite each other when staged for compilation"
+                    ),
+                ));
+            }
+        }
+    }
+
     let mut existing_id = HashSet::new();
     let mut total_weight = 0;
     for case in &problem_config.testcases {
