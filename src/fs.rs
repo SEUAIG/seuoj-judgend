@@ -351,13 +351,22 @@ pub(crate) async fn unzip_bytes_to_path(
                 )
             })?;
 
-            let entry_name = file.name().trim_end_matches('/');
+            let decoded_name = file.name().map_err(|e| {
+                AijError::Request(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_ZIP_ENTRY_NAME".to_string(),
+                    format!("Invalid zip entry name: {}", e),
+                )
+            })?;
+            let entry_name = decoded_name.trim_end_matches('/');
             if entry_name.is_empty() {
                 continue;
             }
             validate_filename(entry_name)?;
 
-            let out_path = path_buf.join(file.mangled_name());
+            // Join only the validated relative name; do not silently rewrite an
+            // invalid archive path into a different destination.
+            let out_path = path_buf.join(entry_name);
 
             let map_create_dir_error = |e: std::io::Error| {
                 let message = format!(
@@ -592,4 +601,67 @@ pub(crate) async fn get_data_paths_by_id(pid: impl AsRef<str>) -> Result<Vec<Pat
         }
     }
     Ok(data_files)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod zip_upgrade_tests {
+    use super::unzip_bytes_to_path;
+    use std::io::{Cursor, Write};
+    use zip::write::SimpleFileOptions;
+
+    fn archive(name: &str, content: &[u8]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file(name, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(content).unwrap();
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[tokio::test]
+    async fn extracts_nested_testcase_without_changing_content() {
+        let destination = tempfile::tempdir().unwrap();
+        unzip_bytes_to_path(archive("nested/1.in", b"1 2\n"), destination.path())
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read(destination.path().join("nested/1.in")).unwrap(),
+            b"1 2\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_archive_parent_traversal() {
+        let base = tempfile::tempdir().unwrap();
+        let destination = base.path().join("testcases");
+        std::fs::create_dir(&destination).unwrap();
+        assert!(
+            unzip_bytes_to_path(archive("../outside", b"blocked"), &destination)
+                .await
+                .is_err()
+        );
+        assert!(!base.path().join("outside").exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn does_not_create_archive_supplied_symlinks() {
+        let base = tempfile::tempdir().unwrap();
+        let destination = base.path().join("testcases");
+        std::fs::create_dir(&destination).unwrap();
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .add_symlink("link", "../outside", SimpleFileOptions::default())
+            .unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        unzip_bytes_to_path(bytes, &destination).await.unwrap();
+        assert!(
+            !std::fs::symlink_metadata(destination.join("link"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(!base.path().join("outside").exists());
+    }
 }

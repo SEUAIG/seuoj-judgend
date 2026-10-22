@@ -100,9 +100,21 @@ pub(crate) async fn prepare_execution(
             let go_bin = AijConfig::get_binary_path("go").await?;
             let mut cmd = Command::new(go_bin);
             cmd.arg("build")
+                // Avoid compiler workers reserving memory for every host core.
+                // The existing address-space and time limits still apply.
+                .arg("-p=1")
                 .arg("-o")
                 .arg(&exec_path)
-                .arg(&source_file_path);
+                .arg(&source_file_path)
+                .env("GOMAXPROCS", "2")
+                .env("GOGC", "50")
+                .env(
+                    "GOMEMLIMIT",
+                    format!(
+                        "{}KiB",
+                        (AijConfig::get().compile_memory_limit_kb / 4).max(1024)
+                    ),
+                );
             match run_compile_with_limit(cmd).await? {
                 CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
                 CompileResult::Success => {}
@@ -127,7 +139,17 @@ pub(crate) async fn prepare_execution(
                 };
             let javac = AijConfig::get_binary_path("javac").await?;
             let mut cmd = Command::new(javac);
-            cmd.arg(&source_file_path);
+            // Bound JVM reservations so javac fits the existing compile limit.
+            cmd.args([
+                "-J-Xms16m",
+                "-J-Xmx256m",
+                "-J-XX:CompressedClassSpaceSize=64m",
+                "-J-XX:ReservedCodeCacheSize=64m",
+                "-J-XX:MaxMetaspaceSize=128m",
+                "-J-XX:ActiveProcessorCount=2",
+                "-J-XX:+UseSerialGC",
+            ])
+            .arg(&source_file_path);
             match run_compile_with_limit(cmd).await? {
                 CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
                 CompileResult::Success => {}
