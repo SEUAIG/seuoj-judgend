@@ -187,3 +187,33 @@ async fn run_weighted_cases(
     }
     Ok(total_score.round() as i32)
 }
+
+#[cfg(test)]
+mod subtask_capacity_tests {
+    use super::*;
+
+    fn acm_subtask() -> Vec<SubtaskConfig> {
+        serde_json::from_value(serde_json::json!([{
+            "id": 1, "cases": (1..=256).collect::<Vec<i32>>(),
+            "score": 100, "type": "min", "pre_subtasks": []
+        }])).unwrap()
+    }
+
+    #[test]
+    fn all_256_cases_pass_gives_full_score() {
+        let mut subtasks = acm_subtask();
+        apply_subtask_score(1, &vec![100; 256], &mut subtasks).unwrap();
+        assert_eq!(subtasks[0].score, 100);
+    }
+
+    #[test]
+    fn one_failure_after_case_100_gives_zero() {
+        for index in [100, 255] {
+            let mut subtasks = acm_subtask();
+            let mut scores = vec![100; 256];
+            scores[index] = 0;
+            apply_subtask_score(1, &scores, &mut subtasks).unwrap();
+            assert_eq!(subtasks[0].score, 0);
+        }
+    }
+}
