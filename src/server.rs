@@ -1,5 +1,6 @@
 //! Server-related functionalities for the AI Judge system.
 
+mod concurrency;
 mod edit_problem_by_id;
 mod get_languages;
 mod get_problem_config;
@@ -14,16 +15,14 @@ mod serve_submission_file;
 
 mod utils;
 
-use crate::config::AijConfig;
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, Request};
 use axum::http::StatusCode;
 use serde_json::json;
-use std::sync::OnceLock;
-use tokio::sync::Semaphore;
 use tracing::error;
 
+pub(crate) use concurrency::{get_concurrency, judge_limiter, put_concurrency, start_timing_probe};
 pub(crate) use edit_problem_by_id::edit_problem_by_id;
 pub(crate) use get_languages::get_languages;
 pub(crate) use get_problem_config::get_problem_config;
@@ -64,13 +63,4 @@ where
             }
         }
     }
-}
-
-static JUDGE_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
-
-pub(crate) async fn get_judge_semaphore() -> &'static Semaphore {
-    JUDGE_SEMAPHORE.get_or_init(|| {
-        let max_concurrent = AijConfig::get().max_concurrent_requests;
-        Semaphore::new(max_concurrent)
-    })
 }

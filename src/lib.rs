@@ -6,10 +6,10 @@
 
 use crate::config::AijConfig;
 use crate::server::{
-    delete_problem_by_id, delete_problem_file, edit_problem_by_id, get_languages,
+    delete_problem_by_id, delete_problem_file, edit_problem_by_id, get_concurrency, get_languages,
     get_problem_by_id, get_problem_config, get_problem_file, get_problem_tree, get_submission_file,
-    get_submission_tree, judge_problem_by_id, judge_problem_online_by_id, put_problem_config,
-    upload_problem_data,
+    get_submission_tree, judge_problem_by_id, judge_problem_online_by_id, put_concurrency,
+    put_problem_config, upload_problem_data,
 };
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -31,6 +31,10 @@ pub fn app() -> Router {
     Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/judge/languages", get(get_languages))
+        .route(
+            "/judge/concurrency",
+            get(get_concurrency).put(put_concurrency),
+        )
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/problem/{pid}", delete(delete_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))
@@ -55,6 +59,11 @@ pub fn app() -> Router {
         )
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024)) // 100 MB
         .layer(TraceLayer::new_for_http())
+}
+
+/// Start background work that needs a Tokio runtime (the timing probe).
+pub fn start_background_tasks() {
+    server::start_timing_probe();
 }
 
 /// initialize the application (configuration, logger, etc.)

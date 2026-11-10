@@ -1,4 +1,4 @@
-use aij_judgend::{app, initialize};
+use aij_judgend::{app, initialize, start_background_tasks};
 use tokio::net::TcpListener;
 use tokio::signal;
 use tracing::info;
@@ -10,6 +10,7 @@ async fn main() -> Result<(), String> {
         "FileSystem initialized with base path: {}",
         &config.problems_dir.to_string_lossy()
     );
+    start_background_tasks();
     let app = app();
     let listen_addr = format!("{}:{}", config.listen_addr, config.listen_port);
     let listener = TcpListener::bind(&listen_addr)

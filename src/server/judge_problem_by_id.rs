@@ -6,7 +6,7 @@ use crate::judger::judge_online;
 use crate::judger::{JudgeResult, SupportedLanguages, judge};
 use crate::schema::OnlineCase;
 use crate::schema::ProblemConfig;
-use crate::server::{AppJson, get_judge_semaphore};
+use crate::server::{AppJson, judge_limiter};
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -52,8 +52,7 @@ pub(crate) async fn judge_problem_by_id(
         ));
     }
     tokio::spawn(async move {
-        let semaphore = get_judge_semaphore().await;
-        let sem = semaphore.acquire().await;
+        let sem = judge_limiter().acquire().await;
         let res = if let Ok(permit) = sem {
             let res = judge(
                 payload.problem_id,
