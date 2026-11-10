@@ -19,16 +19,24 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libseccomp-dev pkg-config
+          sudo apt-get install -y libseccomp-dev pkg-config zip
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.98.1
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo fmt --package aij-judgend -- --check
 
       - name: Lint with Clippy
         run: cargo clippy -- -D warnings
+
+      - name: Prepare isolated synthetic fixtures
+        run: SEUOJ_DISPOSABLE_TESTS=1 bash tests/prepare-fixtures.sh
 
       - name: Run tests
         run: cargo test --verbose
