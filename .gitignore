@@ -36,3 +36,7 @@ backups/
 *.log
 data/certs/
 data/maintenance-*/
+
+# Local maintenance image wrappers (not portable deployment builds)
+/Dockerfile.homework
+/Dockerfile.capacity
