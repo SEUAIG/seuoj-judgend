@@ -20,6 +20,7 @@ WORKDIR /app
 
 # 优化：先只复制依赖清单，构建空壳项目以缓存依赖
 COPY Cargo.toml Cargo.lock ./
+COPY vendor/judger ./vendor/judger
 RUN mkdir -p src/bin && \
     echo 'fn main() {}' > src/bin/main.rs && \
     echo '' > src/lib.rs && \

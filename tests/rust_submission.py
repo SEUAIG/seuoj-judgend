@@ -1,6 +1,6 @@
 """Run inside a disposable judge image with --network none (never production).
 
-docker run --rm --network none --entrypoint python3 IMAGE /tmp/rust_submission.py
+docker run --rm --network none --entrypoint uv IMAGE run --no-project --offline --python /usr/bin/python3 /tmp/rust_submission.py
 Copy this script into the disposable container first, or mount it read-only.
 Starts its own runner, callback receiver and temporary problem/submission trees.
 """
@@ -170,7 +170,7 @@ fn main(){input!{n:usize,a:[i64;n],s:Chars,k:Usize1}println!("{} {} {}",a.iter()
     special = copy.deepcopy(base)
     special["problem_info"].update(problem_type="Special", checker_type="Special")
     special["custom_modules"] = {"checker_path": "checker"}
-    checker = '#!/usr/bin/python3\nimport sys\na=open(sys.argv[2]).read().split();b=open(sys.argv[3]).read().split();sys.exit(0 if a==b else 1)\n'
+    checker = '#!/usr/bin/python3\nimport sys\nassert len(sys.argv)==5 and int(sys.argv[4])>=0\na=open(sys.argv[2]).read().split();b=open(sys.argv[3]).read().split();sys.exit(0 if a==b else 1)\n'
     problem("RUSTSPECIAL", special, {"checker": checker})
     for language, code in (("Rust", RUST), ("Cpp", CPP)):
         expect("special-" + language, code, language=language, pid="RUSTSPECIAL")

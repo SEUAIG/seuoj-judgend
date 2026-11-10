@@ -28,3 +28,7 @@ libc = "0.2"
 [dev-dependencies]
 axum-test = "20.0.0"
 serial_test = "3.4.0"
+
+# Pin a minimal sandbox fix until upstream blocks clone3 as well as clone.
+[patch.crates-io]
+judger = { path = "vendor/judger" }
