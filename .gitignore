@@ -1,4 +1,5 @@
 /target
+toolchains/**/target/
 
 
 .vscode/
@@ -13,3 +14,25 @@ assets/problems/
 
 CLAUDE.md
 .codex
+
+# Production credentials, runtime files and maintenance backups
+
+.work/
+backups/
+*.bak
+*.bak.*
+*.before-*
+*.before.*
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.log
+data/certs/
+data/maintenance-*/
