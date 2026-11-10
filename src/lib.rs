@@ -40,7 +40,12 @@ pub fn app() -> Router {
         .route("/judge/submission", post(judge_problem_by_id))
         .route("/judge/submission/online", post(judge_problem_online_by_id))
         .route("/judge/problem/edit", patch(edit_problem_by_id))
-        .route("/judge/problem/data/{pid}", post(upload_problem_data))
+        .route(
+            "/judge/problem/data/{pid}",
+            post(upload_problem_data).layer(DefaultBodyLimit::max(
+                server::MAX_TESTCASE_UPLOAD_REQUEST_BYTES,
+            )),
+        )
         .route("/judge/problem/config/{pid}", get(get_problem_config))
         .route("/judge/problem/config/{pid}", put(put_problem_config))
         .route("/judge/problem/tree/{pid}", get(get_problem_tree))

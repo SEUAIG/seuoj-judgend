@@ -35,7 +35,7 @@ pub(crate) use serve_problem_by_id::get_problem_by_id;
 pub(crate) use serve_problem_file::delete_problem_file;
 pub(crate) use serve_problem_file::get_problem_file;
 pub(crate) use serve_submission_file::get_submission_file;
-pub(crate) use upload_problem_data::upload_problem_data;
+pub(crate) use upload_problem_data::{MAX_TESTCASE_UPLOAD_REQUEST_BYTES, upload_problem_data};
 
 /// Custom extractor for JSON with custom error handling
 pub(crate) struct AppJson<T>(pub T);

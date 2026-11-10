@@ -7,6 +7,12 @@ use axum::response::IntoResponse;
 use serde_json::json;
 use tracing::{error, info, warn};
 
+/// Maximum compressed archive size: 200 MiB, excluding multipart overhead.
+pub(crate) const MAX_TESTCASE_ARCHIVE_BYTES: usize = 200 * 1024 * 1024;
+/// One extra MiB allows multipart headers and the format field at the file boundary.
+pub(crate) const MAX_TESTCASE_UPLOAD_REQUEST_BYTES: usize =
+    MAX_TESTCASE_ARCHIVE_BYTES + 1024 * 1024;
+
 pub(crate) async fn upload_problem_data(
     Path(pid): Path<String>,
     mut multipart: Multipart,
@@ -21,9 +27,13 @@ pub(crate) async fn upload_problem_data(
     while let Some(part) = multipart.next_field().await.map_err(|e| {
         error!("Failed to read multipart field: {}", e);
         AijError::Request(
-            StatusCode::BAD_REQUEST,
+            e.status(),
             "MULTIPART_READ_ERROR".to_string(),
-            format!("Failed to read multipart field: {}", e),
+            if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+                "压缩包大小不得超过 200 MiB".to_string()
+            } else {
+                format!("Failed to read multipart field: {}", e)
+            },
         )
     })? {
         let name = part.name().unwrap_or_default();
@@ -32,11 +42,25 @@ pub(crate) async fn upload_problem_data(
                 file = Some(part.bytes().await.map_err(|e| {
                     error!("Failed to read file field: {}", e);
                     AijError::Request(
-                        StatusCode::BAD_REQUEST,
+                        e.status(),
                         "FILE_READ_ERROR".to_string(),
-                        format!("Failed to read file field: {}", e),
+                        if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+                            "压缩包大小不得超过 200 MiB".to_string()
+                        } else {
+                            format!("Failed to read file field: {}", e)
+                        },
                     )
                 })?);
+                if file
+                    .as_ref()
+                    .is_some_and(|bytes| bytes.len() > MAX_TESTCASE_ARCHIVE_BYTES)
+                {
+                    return Err(AijError::Request(
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        "ARCHIVE_TOO_LARGE".to_string(),
+                        "压缩包大小不得超过 200 MiB".to_string(),
+                    ));
+                }
             }
             "format" => {
                 format = Some(part.text().await.map_err(|e| {
