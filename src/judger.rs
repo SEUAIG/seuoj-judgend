@@ -49,6 +49,7 @@ pub(crate) enum SupportedLanguages {
     Nodejs,
     Go,
     Java,
+    Rust,
 }
 
 pub(crate) async fn judge(

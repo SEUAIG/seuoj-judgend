@@ -30,6 +30,15 @@ RUN mkdir -p src/bin && \
 COPY . .
 RUN find src -type f -exec touch {} + && cargo build --release --locked
 
+# Use the exact same compiler for the prebuilt crates and contestant programs.
+FROM builder AS rust-toolchain
+COPY toolchains/rust-libs /opt/rust-libs-build
+RUN cargo build --manifest-path /opt/rust-libs-build/Cargo.toml --release --locked && \
+    mkdir -p /opt/rust-libs && \
+    cp -a /opt/rust-libs-build/target/release/deps /opt/rust-libs/deps && \
+    cp /opt/rust-libs/deps/libproconio-*.rlib /opt/rust-libs/libproconio.rlib && \
+    cp -a "$(rustc --print sysroot)" /opt/rust
+
 # Fixed security releases for the languages exposed by the judge.
 FROM node:24.22.1-bookworm-slim AS node-toolchain
 FROM golang:1.26.10-bookworm AS go-toolchain
@@ -65,6 +74,9 @@ WORKDIR /app
 COPY --from=node-toolchain /usr/local/bin/node /usr/local/bin/node
 COPY --from=go-toolchain /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
+COPY --from=rust-toolchain /opt/rust /opt/rust
+COPY --from=rust-toolchain /opt/rust-libs /opt/rust-libs
+ENV PATH="/opt/rust/bin:${PATH}"
 
 # Warm the standard packages used by submissions before the compile timer runs.
 RUN printf 'package main\nimport ("fmt"; "os")\nfunc main() { fmt.Fprintln(os.Stdout, "ready") }\n' > /tmp/oj-go-warmup.go && \
@@ -81,7 +93,8 @@ RUN gcc --version && \
     java -version && \
     go version && \
     dpkg-query -W python3 && \
-    node --version
+    node --version && \
+    rustc --version
 
 # 启动程序
 CMD ["./runner"]

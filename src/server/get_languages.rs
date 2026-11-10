@@ -60,9 +60,12 @@ pub(crate) async fn get_languages() -> Result<Json<serde_json::Value>> {
             SupportedLanguages::Nodejs => ("node", "--version"),
             SupportedLanguages::Go => ("go", "version"),
             SupportedLanguages::Java => ("java", "-version"),
+            SupportedLanguages::Rust => ("rustc", "--version"),
         };
         if let Ok(bin_path) = AijConfig::get_binary_path(bin_name).await
             && let Some(version) = get_binary_version(&bin_path, version_arg).await
+            && (lang != SupportedLanguages::Rust
+                || Path::new("/opt/rust-libs/libproconio.rlib").is_file())
         {
             languages.push(LanguageInfo {
                 name: lang.to_string(),

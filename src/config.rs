@@ -137,6 +137,7 @@ fn default_toolchains() -> Vec<String> {
         "javac".into(),
         "python3".into(),
         "node".into(),
+        "rustc".into(),
     ]
 }
 

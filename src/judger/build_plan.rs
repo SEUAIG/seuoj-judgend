@@ -53,6 +53,7 @@ pub(crate) async fn prepare_execution(
         SupportedLanguages::Nodejs => "js",
         SupportedLanguages::Go => "go",
         SupportedLanguages::Java => "java",
+        SupportedLanguages::Rust => "rs",
     };
     let mut source_file_path = tmp_dir.join("source").with_extension(source_file_extension);
     fs::write_to_file(&source_file_path, code).await?;
@@ -68,7 +69,7 @@ pub(crate) async fn prepare_execution(
             let result = if language == SupportedLanguages::C {
                 let gcc = AijConfig::get_binary_path("gcc").await?;
                 let mut cmd = Command::new(gcc);
-                cmd.arg("-O2");
+                cmd.arg("-O2").arg("-DONLINE_JUDGE");
                 if !grader_paths.is_empty() {
                     cmd.arg("-I").arg(tmp_dir);
                 }
@@ -79,7 +80,9 @@ pub(crate) async fn prepare_execution(
             } else {
                 let gpp = AijConfig::get_binary_path("g++").await?;
                 let mut cmd = Command::new(gpp);
-                cmd.arg("-O2").arg("-ftemplate-depth=1024");
+                cmd.arg("-O2")
+                    .arg("-DONLINE_JUDGE")
+                    .arg("-ftemplate-depth=1024");
                 if language == SupportedLanguages::Cpp20 {
                     cmd.arg("-std=c++20");
                 }
@@ -96,6 +99,31 @@ pub(crate) async fn prepare_execution(
                 CompileResult::Success => {}
             }
             (exec_path, vec![], judger::SeccompRuleName::CCpp)
+        }
+        SupportedLanguages::Rust => {
+            let exec_path = tmp_dir.join("executable").to_string_lossy().to_string();
+            let rustc = AijConfig::get_binary_path("rustc").await?;
+            let mut cmd = Command::new(rustc);
+            // Dependencies are built with the same pinned compiler as submissions.
+            // No Cargo invocation or dependency downloads occur during judging.
+            cmd.args(["--edition=2021", "-O", "-C", "codegen-units=1"])
+                .arg("--cfg")
+                .arg("ONLINE_JUDGE")
+                .arg("--extern")
+                .arg("proconio=/opt/rust-libs/libproconio.rlib")
+                .arg("-L")
+                .arg("dependency=/opt/rust-libs/deps")
+                .arg(&source_file_path)
+                .arg("-o")
+                .arg(&exec_path)
+                .kill_on_drop(true);
+            match run_compile_with_limit(cmd).await? {
+                CompileResult::CompileError(e) => return Ok(PrepareOutcome::CompileError(e)),
+                CompileResult::Success => {}
+            }
+            // Rust startup uses signal/alternate-stack syscalls absent from CCpp.
+            // General permits those while blocking threads, sockets and file writes.
+            (exec_path, vec![], judger::SeccompRuleName::General)
         }
         SupportedLanguages::Python => {
             problem_config.problem_info.time_limit_ms =
