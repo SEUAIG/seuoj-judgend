@@ -172,7 +172,7 @@ async fn run_weighted_cases(
     // 用 f64 累积加权总分，避免 i32 除法截断（每个测试点保留原始 score 0-100）
     let mut total_score: f64 = 0.0;
     for case_config in &problem_config.testcases {
-        let mut res = judge_single_case(
+        let res = judge_single_case(
             case_config,
             (pid, submission_id),
             (problem_type, checker_type, custom_modules),
@@ -196,7 +196,8 @@ mod subtask_capacity_tests {
         serde_json::from_value(serde_json::json!([{
             "id": 1, "cases": (1..=256).collect::<Vec<i32>>(),
             "score": 100, "type": "min", "pre_subtasks": []
-        }])).unwrap()
+        }]))
+        .unwrap()
     }
 
     #[test]

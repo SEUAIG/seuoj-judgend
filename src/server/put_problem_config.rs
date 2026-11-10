@@ -83,8 +83,7 @@ pub(crate) async fn put_problem_config(
         let mut seen_names = HashSet::new();
         for grader_path in &custom_modules.grader_paths {
             fs::validate_filename(grader_path)?;
-            let _ =
-                fs::get_path_by_pid_name(&pid, format!("data/{grader_path}"), true).await?;
+            let _ = fs::get_path_by_pid_name(&pid, format!("data/{grader_path}"), true).await?;
             let file_name = std::path::Path::new(grader_path)
                 .file_name()
                 .unwrap_or_default()

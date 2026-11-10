@@ -15,7 +15,7 @@ async fn main() -> Result<(), String> {
     let listen_addr = format!("{}:{}", config.listen_addr, config.listen_port);
     let listener = TcpListener::bind(&listen_addr)
         .await
-        .map_err(|e| format!("Failed to bind to {}: {}", &listen_addr, e))?;
+        .map_err(|e| format!("Failed to bind to {}: {}", listen_addr, e))?;
     info!("Server listening on {}", listen_addr);
     axum::serve(listener, app)
         .with_graceful_shutdown(async {

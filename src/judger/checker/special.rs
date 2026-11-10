@@ -123,10 +123,16 @@ mod tests {
         let input_path = "assets/problems/test01/data/1.in";
         let output_path = "assets/problems/test01/data/1.ans";
         let ans_path = "assets/problems/test01/data/1.ans";
-        let res =
-            super::special_checker("test01", input_path, output_path, ans_path, Some("checker"), 0)
-                .await
-                .unwrap();
+        let res = super::special_checker(
+            "test01",
+            input_path,
+            output_path,
+            ans_path,
+            Some("checker"),
+            0,
+        )
+        .await
+        .unwrap();
         assert!(matches!(res, super::CheckerResult::Accepted));
     }
 }

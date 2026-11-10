@@ -246,7 +246,6 @@ pub(crate) async fn prepare_execution(
     })))
 }
 
-
 /// Copy the problem's grader files into the submission tmp dir, returning the
 /// ones that are translation units and therefore have to be handed to the
 /// compiler alongside the submitted source.

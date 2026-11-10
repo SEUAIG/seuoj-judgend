@@ -43,7 +43,7 @@ pub(crate) async fn judge_problem_by_id(
         .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
     let problem_config = ProblemConfig::from_pid(&payload.problem_id).await?;
     if problem_config.testcases.is_empty() {
-        let message = format!("Problem {} has no test cases.", &payload.problem_id);
+        let message = format!("Problem {} has no test cases.", payload.problem_id);
         error!("{}", message);
         return Err(AijError::Request(
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -66,7 +66,7 @@ pub(crate) async fn judge_problem_by_id(
         } else {
             let message = format!(
                 "Failed to acquire semaphore for submission_id={}",
-                &payload.submission_id
+                payload.submission_id
             );
             error!("{}", message);
             Err(AijError::Judge(
@@ -87,7 +87,7 @@ pub(crate) async fn judge_problem_by_id(
 
         let server_addr = match AijConfig::get_backend_base_addr() {
             Ok(addr) => {
-                format!("{}/judge/submission/{}", addr, &payload.submission_id)
+                format!("{}/judge/submission/{}", addr, payload.submission_id)
             }
             Err(e) => {
                 error!("Failed to get backend base address for reporting: {}", e);
@@ -137,7 +137,7 @@ pub(crate) async fn judge_problem_online_by_id(
         .await
         .map_err(|e| e.set_code(StatusCode::BAD_REQUEST))?;
     if payload.testcases.is_empty() {
-        let message = format!("Problem {} has no test cases.", &payload.problem_id);
+        let message = format!("Problem {} has no test cases.", payload.problem_id);
         error!("{}", message);
         return Err(AijError::Request(
             StatusCode::UNPROCESSABLE_ENTITY,

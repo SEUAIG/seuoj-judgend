@@ -97,7 +97,7 @@ pub(crate) async fn delete_problem_file(
     // time, so only the source file itself matters -- there is no derived
     // binary to keep around.
     if let Some(custom_modules) = &problem_config.custom_modules
-        && custom_modules.grader_paths.iter().any(|g| *g == filename)
+        && custom_modules.grader_paths.contains(&filename)
     {
         let message = format!(
             "Cannot delete file '{}' because it is used as a grader of problem {}",
