@@ -1,6 +1,8 @@
 use crate::error::Result;
 use crate::fs::check_problem_exists;
-use crate::schema::{ProblemConfig, ProblemExample, ProblemMetadata};
+use crate::schema::{
+    CheckerType, ProblemConfig, ProblemExample, ProblemMetadata, ProblemType, StatementType,
+};
 use crate::server::AppJson;
 use axum::Json;
 use axum::http::StatusCode;
@@ -13,6 +15,7 @@ use tracing::{error, info, warn};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct OptionProblem {
     pid: String,
+    statement_type: Option<StatementType>,
     description: Option<String>,
     input: Option<String>,
     output: Option<String>,
@@ -83,7 +86,18 @@ pub(crate) async fn edit_problem_by_id(
             )
         })?;
         info!("Creating config file for id: {}", problem_id);
-        let problem_config = ProblemConfig::default();
+        let mut problem_config = ProblemConfig::default();
+        match payload.statement_type {
+            Some(StatementType::Interactive | StatementType::InteractiveWithInput) => {
+                problem_config.problem_info.problem_type = ProblemType::Interactive;
+                problem_config.problem_info.checker_type = CheckerType::Interactor;
+            }
+            Some(StatementType::Special) => {
+                problem_config.problem_info.problem_type = ProblemType::Special;
+                problem_config.problem_info.checker_type = CheckerType::Special;
+            }
+            _ => {}
+        }
         problem_config.save(&problem_id).await?;
     }
 
@@ -101,6 +115,9 @@ pub(crate) async fn edit_problem_by_id(
             ..Default::default()
         }
     };
+    if is_new {
+        metadata.statement_type = payload.statement_type;
+    }
     if let Some(description) = payload.description.take() {
         metadata.description = description;
     }

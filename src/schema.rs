@@ -11,9 +11,21 @@ use judger::Config;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
+/// Optional layout for newly authored statements.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub(crate) enum StatementType {
+    Standard,
+    Special,
+    Interactive,
+    InteractiveWithInput,
+    Communication,
+}
+
 /// Problem metadata and description (stored as Markdown with YAML frontmatter).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct ProblemMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) statement_type: Option<StatementType>,
     /// Problem ID
     pub(crate) pid: String,
     /// Problem description (Markdown format)

@@ -10,6 +10,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Frontmatter {
+    statement_type: Option<crate::schema::StatementType>,
     pid: String,
 }
 
@@ -55,6 +56,7 @@ pub(crate) fn parse_problem_md(content: &str) -> Result<ProblemMetadata> {
 
     Ok(ProblemMetadata {
         pid: fm.pid,
+        statement_type: fm.statement_type,
         description,
         input,
         output,
@@ -70,6 +72,9 @@ pub(crate) fn serialize_problem_md(metadata: &ProblemMetadata) -> Result<String>
     // Frontmatter
     out.push_str("---\n");
     out.push_str(&format!("pid: {}\n", yaml_scalar(&metadata.pid)));
+    if let Some(kind) = metadata.statement_type {
+        out.push_str(&format!("statement_type: {kind:?}\n"));
+    }
     out.push_str("---\n\n");
 
     // Sections
