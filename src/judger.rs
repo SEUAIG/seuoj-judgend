@@ -13,7 +13,7 @@ mod judge_result;
 mod judger_helpers;
 mod offline_cases;
 mod online_cases;
-mod runtime;
+pub(crate) mod runtime;
 
 use crate::judger::build_plan::{PrepareOutcome, prepare_execution};
 pub(crate) use crate::judger::judge_result::{JudgeResult, JudgeResultItem, JudgeResultType};

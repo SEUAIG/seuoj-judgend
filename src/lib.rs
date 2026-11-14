@@ -6,9 +6,9 @@
 
 use crate::config::AijConfig;
 use crate::server::{
-    delete_problem_by_id, delete_problem_file, edit_problem_by_id, get_concurrency, get_languages,
+    delete_problem_by_id, delete_problem_file, edit_problem_by_id, get_hosts, get_languages,
     get_problem_by_id, get_problem_config, get_problem_file, get_problem_tree, get_submission_file,
-    get_submission_tree, judge_problem_by_id, judge_problem_online_by_id, put_concurrency,
+    get_submission_tree, judge_problem_by_id, judge_problem_online_by_id, put_hosts,
     put_problem_config, upload_problem_data,
 };
 use axum::Router;
@@ -31,10 +31,7 @@ pub fn app() -> Router {
     Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/judge/languages", get(get_languages))
-        .route(
-            "/judge/concurrency",
-            get(get_concurrency).put(put_concurrency),
-        )
+        .route("/judge/hosts", get(get_hosts).put(put_hosts))
         .route("/judge/problem/{pid}", get(get_problem_by_id))
         .route("/judge/problem/{pid}", delete(delete_problem_by_id))
         .route("/judge/submission", post(judge_problem_by_id))

@@ -53,11 +53,71 @@ pub(crate) fn build_run_config(
     config
 }
 
+tokio::task_local! {
+    /// CPU core of the judge host judging the current submission. Sandboxed
+    /// runs and compilers started inside the scope are pinned to it.
+    pub(crate) static JUDGE_CORE: usize;
+}
+
+/// The judge host core for the current task, if any.
+pub(crate) fn current_judge_core() -> Option<usize> {
+    JUDGE_CORE.try_with(|core| *core).ok()
+}
+
+fn cpu_set_of(cores: &[usize]) -> libc::cpu_set_t {
+    // SAFETY: cpu_set_t is plain data; CPU_ZERO/CPU_SET only write inside it.
+    unsafe {
+        let mut set: libc::cpu_set_t = std::mem::zeroed();
+        libc::CPU_ZERO(&mut set);
+        for &core in cores {
+            libc::CPU_SET(core, &mut set);
+        }
+        set
+    }
+}
+
+/// Cores this process may run on, in ascending order.
+pub(crate) fn available_cores() -> Vec<usize> {
+    // SAFETY: sched_getaffinity writes at most size_of::<cpu_set_t>() bytes.
+    unsafe {
+        let mut set: libc::cpu_set_t = std::mem::zeroed();
+        if libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) != 0 {
+            return Vec::new();
+        }
+        (0..libc::CPU_SETSIZE as usize)
+            .filter(|&c| libc::CPU_ISSET(c, &set))
+            .collect()
+    }
+}
+
+/// Pin the calling thread (and processes it forks afterwards) to `cores`.
+/// Safe to call between fork and exec.
+pub(crate) fn pin_current_thread(cores: &[usize]) -> bool {
+    let set = cpu_set_of(cores);
+    // SAFETY: pid 0 means the calling thread; `set` is a valid cpu_set_t.
+    unsafe { libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set) == 0 }
+}
+
+/// Run `f` with the calling thread pinned to the current judge host's core,
+/// restoring the previous affinity afterwards.
+fn with_judge_core<T>(f: impl FnOnce() -> T) -> T {
+    let Some(core) = current_judge_core() else {
+        return f();
+    };
+    let previous = available_cores();
+    let pinned = !previous.is_empty() && pin_current_thread(&[core]);
+    let out = f();
+    if pinned {
+        pin_current_thread(&previous);
+    }
+    out
+}
+
 pub(crate) fn run_with_interactor(
     config: &judger::Config,
     interactor: Option<std::path::PathBuf>,
 ) -> Result<judger::RunResult> {
-    judger::run(config, interactor).map_err(|e| {
+    with_judge_core(|| judger::run(config, interactor)).map_err(|e| {
         AijError::Judge(
             StatusCode::INTERNAL_SERVER_ERROR,
             "JUDGER_RUN_FAILED".to_string(),

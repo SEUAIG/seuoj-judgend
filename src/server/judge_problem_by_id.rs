@@ -3,10 +3,12 @@ use crate::error::AijError;
 use crate::error::Result;
 use crate::fs::{assert_problem_exists, delete_dir_by_submission_id};
 use crate::judger::judge_online;
+use crate::judger::runtime::JUDGE_CORE;
 use crate::judger::{JudgeResult, SupportedLanguages, judge};
 use crate::schema::OnlineCase;
 use crate::schema::ProblemConfig;
-use crate::server::{AppJson, judge_limiter};
+use crate::server::judgehosts::now_millis;
+use crate::server::{AppJson, judge_hosts};
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -52,28 +54,40 @@ pub(crate) async fn judge_problem_by_id(
         ));
     }
     tokio::spawn(async move {
-        let sem = judge_limiter().acquire().await;
-        let res = if let Ok(permit) = sem {
-            let res = judge(
+        let lease = judge_hosts().acquire(&payload.submission_id).await;
+        let (res, host) = if let Some(lease) = lease {
+            info!(
+                "Judging submission_id={} on {} (core {:?})",
+                &payload.submission_id,
+                lease.name(),
+                lease.core()
+            );
+            let judging = judge(
                 payload.problem_id,
                 payload.code,
                 payload.language,
                 payload.submission_id.clone(),
-            )
-            .await;
-            drop(permit);
-            res
+            );
+            let res = match lease.core() {
+                Some(core) => JUDGE_CORE.scope(core, judging).await,
+                None => judging.await,
+            };
+            let started_at = lease.started_at();
+            let host = (lease.name(), started_at, now_millis() - started_at);
+            drop(lease);
+            (res, Some(host))
         } else {
             let message = format!(
-                "Failed to acquire semaphore for submission_id={}",
-                payload.submission_id
+                "No judge host available for submission_id={}",
+                &payload.submission_id
             );
             error!("{}", message);
-            Err(AijError::Judge(
+            let res = Err(AijError::Judge(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "SEMAPHORE_ACQUIRE_FAILED".to_string(),
+                "JUDGE_HOST_UNAVAILABLE".to_string(),
                 message,
-            ))
+            ));
+            (res, None)
         };
 
         if !AijConfig::get().save_submissions
@@ -94,7 +108,14 @@ pub(crate) async fn judge_problem_by_id(
                 return;
             }
         };
-        let json_content = parse_content_from_result(res);
+        let mut json_content = parse_content_from_result(res);
+        if let (Some((name, started_at, elapsed_ms)), Some(obj)) =
+            (host, json_content.as_object_mut())
+        {
+            obj.insert("judgeHost".to_string(), json!(name));
+            obj.insert("judgeStartedAt".to_string(), json!(started_at));
+            obj.insert("judgeMs".to_string(), json!(elapsed_ms));
+        }
         debug!(
             "Result to report: {}, submission_id={}",
             json_content, payload.submission_id
