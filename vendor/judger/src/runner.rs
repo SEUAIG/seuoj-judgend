@@ -3,7 +3,7 @@ use nix::fcntl::OFlag;
 use nix::libc;
 use nix::sys::signal::Signal;
 use nix::unistd::{ForkResult, Uid, fork};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 /// Result of the program
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RunResult {
     /// CPU time used in milliseconds.
     pub cpu_time: i32,

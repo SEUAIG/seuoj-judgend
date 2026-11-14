@@ -3,8 +3,17 @@ use tokio::net::TcpListener;
 use tokio::signal;
 use tracing::info;
 
+fn main() -> Result<(), String> {
+    if std::env::args_os().nth(1).as_deref()
+        == Some(std::ffi::OsStr::new(aij_judgend::sandbox::HELPER_ARG))
+    {
+        return aij_judgend::sandbox::helper_main();
+    }
+    serve()
+}
+
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn serve() -> Result<(), String> {
     let config = initialize().await;
     info!(
         "FileSystem initialized with base path: {}",

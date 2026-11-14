@@ -3,7 +3,7 @@ use libseccomp::{ScmpAction, ScmpArgCompare, ScmpCompareOp, ScmpFilterContext, S
 use nix::libc;
 
 /// Seccomp rule names for different programming languages and general use.
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum SeccompRuleName {
     /// C/C++ seccomp rules.
     CCpp,

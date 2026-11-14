@@ -57,7 +57,7 @@ pub(crate) fn run_with_interactor(
     config: &judger::Config,
     interactor: Option<std::path::PathBuf>,
 ) -> Result<judger::RunResult> {
-    judger::run(config, interactor).map_err(|e| {
+    crate::sandbox::run_current(config, interactor).map_err(|e| {
         AijError::Judge(
             StatusCode::INTERNAL_SERVER_ERROR,
             "JUDGER_RUN_FAILED".to_string(),

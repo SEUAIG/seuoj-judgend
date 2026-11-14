@@ -259,7 +259,7 @@ async fn run_probe_once(config: &judger::Config) -> std::result::Result<ProbeSam
     let at = now_millis();
     let before = limiter.snapshot().running;
     let config = config.clone();
-    let result = tokio::task::spawn_blocking(move || judger::run(&config, None))
+    let result = tokio::task::spawn_blocking(move || crate::sandbox::run_current(&config, None))
         .await
         .map_err(|e| format!("probe task: {}", e))??;
     let after = limiter.snapshot().running;
