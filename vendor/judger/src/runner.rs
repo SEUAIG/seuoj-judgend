@@ -130,8 +130,12 @@ pub fn run(config: &Config, interactor: Option<PathBuf>) -> Result<RunResult, St
                 result.result = ErrorCode::SystemError;
             } else {
                 result.exit_code = libc::WEXITSTATUS(status);
-                result.cpu_time = (rusage.ru_utime.tv_sec as i64 * 1000
-                    + (rusage.ru_utime.tv_usec as i64 / 1000))
+                // RLIMIT_CPU accounts for both user and kernel CPU time.
+                // Omitting stime can report SIGXCPU as RE for syscall-heavy
+                // programs even though they exceeded the requested CPU limit.
+                result.cpu_time = ((rusage.ru_utime.tv_sec as i64 + rusage.ru_stime.tv_sec as i64)
+                    * 1000
+                    + (rusage.ru_utime.tv_usec as i64 + rusage.ru_stime.tv_usec as i64) / 1000)
                     as i32;
                 result.memory = (rusage.ru_maxrss as i64) * 1024;
 

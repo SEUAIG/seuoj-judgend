@@ -34,7 +34,20 @@ fn memory_is_independent_of_parent_heap_and_still_enforced() {
         &source,
         r#"
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 int main(int argc, char **argv) {
+    if (!strcmp(argv[1], "cpu")) {
+        struct timespec start, now;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+        do {
+            char c;
+            for (int i=0;i<1024;++i) read(0,&c,1);
+            clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+        } while ((now.tv_sec-start.tv_sec)*1000000000LL+now.tv_nsec-start.tv_nsec<200000000);
+        return 0;
+    }
     size_t n = (size_t)atoi(argv[1]) * 1024 * 1024;
     volatile char *p = malloc(n ? n : 1);
     if (!p) return 2;
@@ -73,6 +86,13 @@ int main(int argc, char **argv) {
         assert!(result.memory >= (mib as i64 - 1) * 1024 * 1024);
         assert!(result.memory < (mib as i64 + 12) * 1024 * 1024);
     }
+    let mut cpu_config = config(dir.path(), 9, 0, 64);
+    cpu_config.args[1] = "cpu".into();
+    cpu_config.max_cpu_time = 100;
+    let cpu_result = sandbox::run(executable, &cpu_config, None).unwrap();
+    println!("syscall-heavy 200ms CPU / 100ms limit: {cpu_result:?}");
+    assert!(cpu_result.cpu_time >= 190);
+    assert_eq!(cpu_result.result, judger::ErrorCode::CpuTimeLimitExceeded);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (10..14)
             .map(|id| {
