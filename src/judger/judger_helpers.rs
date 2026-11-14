@@ -56,9 +56,13 @@ pub(crate) enum CompileResult {
 pub(crate) async fn run_compile_with_limit(mut cmd: Command) -> Result<CompileResult> {
     let config = AijConfig::get();
     let time_limit = Duration::from_millis(config.compile_time_limit_ms);
+    let core = crate::judger::runtime::current_judge_core();
 
     unsafe {
         cmd.pre_exec(move || {
+            if let Some(core) = core {
+                crate::judger::runtime::pin_current_thread(&[core]);
+            }
             let limit = config.compile_memory_limit_kb * 1024;
             let rlimit = libc::rlimit {
                 rlim_cur: limit,
