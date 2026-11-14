@@ -12,3 +12,4 @@ mkdir -p assets
 cp -a tests/fixtures/problems assets/problems
 cp -a assets/problems/test01 assets/problems/test02
 chmod +x assets/problems/test01/data/checker assets/problems/test02/data/checker
+g++ -O2 -std=c++17 assets/testlib/default-checker.cpp -o assets/testlib/default-checker

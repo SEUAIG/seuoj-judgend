@@ -25,7 +25,9 @@ pub(crate) async fn check(
     time_ms: u64,
 ) -> Result<CheckerResult> {
     Ok(match checker_type {
-        CheckerType::Standard => standard_checker(problem_id, output_path, ans_path).await?,
+        CheckerType::Standard => {
+            standard_checker(problem_id, input_path, output_path, ans_path).await?
+        }
         CheckerType::Special => {
             special_checker(
                 problem_id,

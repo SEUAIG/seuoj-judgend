@@ -117,6 +117,14 @@ points 75.5 部分正确：缺少边界情况
 
 检查器参考[Checkers with testlib.h](https://codeforces.com/blog/entry/18431)。
 
+`Standard` 使用内置的 testlib 比较器 `assets/testlib/default-checker.cpp`：按原始字节逐行比较，
+忽略行末 ASCII 空格、Tab、CR 和文件末尾空行；保留行内空格、换行、大小写、前导零及非 ASCII 字节。
+这沿用 Hydro `default` 的格式要求，不使用按数值比较的 `ncmp` 或忽略全部空白的 `wcmp`。
+选手输出含非 UTF-8 字节时仍正常比较，差异判 WA；比较器无法启动或缺少标准答案等故障仍报评测错误。
+Docker 构建会编译内置比较器；本地运行前执行
+`g++ -O2 -std=c++17 assets/testlib/default-checker.cpp -o assets/testlib/default-checker`。
+隔离测试环境的 `tests/prepare-fixtures.sh` 也会完成这一步。
+
 ### 编写交互器和检查器的额外说明
 
 对于二进制上传方式，你需要自行编译交互器和检查器为可执行文件并上传。

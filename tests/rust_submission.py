@@ -201,6 +201,17 @@ input!{from &mut source,a:i64,b:i64}println!("{}",a+b);io::stdout().flush().unwr
     subtasks["subtasks"] = [{"id": 1, "cases": [1, 2], "score": 100, "type": "min", "pre_subtasks": []}]
     problem("RUSTSUBTASK", subtasks)
     expect("rust-subtasks", RUST, pid="RUSTSUBTASK")
+
+    # RLE's single-character count bug produces both invalid UTF-8 and NUL.
+    # Run the complete offline checker/callback path, not only online execution.
+    problem("RLEBYTES", base, {
+        "1.in": "a" * 80 + "\n", "1.ans": "a80\n",
+        "2.in": "b" * 208 + "\n", "2.ans": "b208\n",
+    })
+    rle_bad = '#include <iostream>\n#include <string>\nint main(){std::string s;std::cin>>s;std::cout<<s[0]<<(char)(\'0\'+s.size());}'
+    rle_good = rle_bad.replace("(char)('0'+s.size())", "s.size()")
+    expect("rle-invalid-bytes", rle_bad, "WrongAnswer", language="Cpp", pid="RLEBYTES")
+    expect("rle-correct-after-invalid", rle_good, language="Cpp", pid="RLEBYTES")
     print(json.dumps({"passed": len(checks)}), flush=True)
 
 
