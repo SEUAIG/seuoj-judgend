@@ -209,6 +209,87 @@ input!{from &mut source,a:i64,b:i64}println!("{}",a+b);io::stdout().flush().unwr
     problem("RUSTSUBTASK", subtasks)
     expect("rust-subtasks", RUST, pid="RUSTSUBTASK")
 
+    # Exercise the real case loop and callbacks, including skipped-case metadata.
+    skip_config = copy.deepcopy(base)
+    skip_config["testcases"] = [
+        {"id": i, "in_path": f"{i}.in", "ans_path": f"{i}.ans", "weight": 25}
+        for i in range(1, 5)
+    ]
+    skip_config["subtasks"] = [
+        {"id": 1, "cases": [1, 2, 3, 4], "score": 100, "type": "min", "pre_subtasks": []}
+    ]
+    skip_files = {f"{i}.{ext}": f"{i}\n" for i in range(1, 5) for ext in ("in", "ans")}
+    problem("SKIPMIN", skip_config, skip_files)
+    echo = '#include <iostream>\nint main(){int x;std::cin>>x;std::cout<<x;}'
+
+    def check_cases(name, pid, code, expected, score, sub_scores=None):
+        result = submit(name, code, language="Cpp", pid=pid)
+        assert result["status"] == "Success", (name, result)
+        cases = result["resultDetail"]
+        assert len(cases) == len(expected), (name, result)
+        assert {c["id"]: c["type"] for c in cases} == expected, (name, result)
+        assert result["score"] == score, (name, result)
+        if sub_scores is not None:
+            assert {s["id"]: s["score"] for s in result["subtasks"]} == sub_scores, (name, result)
+        for case in cases:
+            if case["type"] == "Skipped":
+                assert case["time"] == case["mem"] == case["score"] == 0, case
+                assert case["in"] == case["out"] == case["ans"] == "", case
+        record(name, result)
+
+    for failed in (1, 2, 4):
+        wrong = echo.replace("std::cout<<x", f"std::cout<<(x=={failed}?0:x)")
+        check_cases(f"min-fail-{failed}", "SKIPMIN", wrong,
+                    {i: "Accepted" if i < failed else "WrongAnswer" if i == failed else "Skipped"
+                     for i in range(1, 5)}, 0, {1: 0})
+    check_cases("min-all-pass", "SKIPMIN", echo, {i: "Accepted" for i in range(1, 5)}, 100)
+    for name, code, verdict in (
+        ("re", "int main(){return 1;}", "RuntimeError"),
+        ("tle", "int main(){for(;;){asm volatile(\"\");}}", "TimeLimitExceeded"),
+    ):
+        check_cases("min-" + name, "SKIPMIN", code,
+                    {1: verdict, 2: "Skipped", 3: "Skipped", 4: "Skipped"}, 0)
+
+    summed = copy.deepcopy(skip_config)
+    summed["subtasks"][0]["type"] = "sum"
+    problem("SKIPSUM", summed, skip_files)
+    wrong_first = echo.replace("std::cout<<x", "std::cout<<(x==1?0:x)")
+    check_cases("sum-continues", "SKIPSUM", wrong_first,
+                {1: "WrongAnswer", 2: "Accepted", 3: "Accepted", 4: "Accepted"}, 75, {1: 75})
+    weighted = copy.deepcopy(skip_config)
+    weighted["subtasks"] = []
+    problem("SKIPWEIGHTED", weighted, skip_files)
+    check_cases("weighted-continues", "SKIPWEIGHTED", wrong_first,
+                {1: "WrongAnswer", 2: "Accepted", 3: "Accepted", 4: "Accepted"}, 75)
+
+    chain = copy.deepcopy(skip_config)
+    chain["subtasks"] = [
+        {"id": i, "cases": [i], "score": 25, "type": "min",
+         "pre_subtasks": [i - 1] if i in (2, 3) else []}
+        for i in range(1, 5)
+    ]
+    problem("SKIPCHAIN", chain, skip_files)
+    check_cases("dependency-chain", "SKIPCHAIN", wrong_first,
+                {1: "WrongAnswer", 2: "Skipped", 3: "Skipped", 4: "Accepted"}, 25,
+                {1: 0, 2: 0, 3: 0, 4: 25})
+    check_cases("dependency-chain-all-pass", "SKIPCHAIN", echo,
+                {i: "Accepted" for i in range(1, 5)}, 100)
+
+    partial = copy.deepcopy(skip_config)
+    partial["problem_info"].update(problem_type="Special", checker_type="Special")
+    partial["custom_modules"] = {"checker_path": "checker"}
+    partial_checker = ('#!/usr/bin/python3\nimport sys\n'
+                       'x=int(open(sys.argv[1]).read())\n'
+                       'print("points", {1:0.5,2:0.25,3:0.75,4:1.0}[x], file=sys.stderr)\n'
+                       'sys.exit(7)\n')
+    problem("SKIPPARTIAL", partial, dict(skip_files, checker=partial_checker))
+    check_cases("positive-partial-continues", "SKIPPARTIAL", echo,
+                {i: "PartiallyAccepted" for i in range(1, 5)}, 25)
+    problem("SKIPZERO", partial, dict(skip_files,
+            checker=partial_checker.replace("2:0.25", "2:0.0")))
+    check_cases("zero-partial-skips", "SKIPZERO", echo,
+                {1: "PartiallyAccepted", 2: "PartiallyAccepted", 3: "Skipped", 4: "Skipped"}, 0)
+
     # RLE's single-character count bug produces both invalid UTF-8 and NUL.
     # Run the complete offline checker/callback path, not only online execution.
     problem("RLEBYTES", base, {

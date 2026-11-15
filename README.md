@@ -89,12 +89,17 @@ id = 1
 cases = [1]
 pre_subtasks = []
 score = 100
-type = "min" # (min：子任务得分为包含的测试点中得分最低的那个，sum：子任务得分为包含的测试点得分之和)
+type = "min" # min：取测试点最低分，sum：取测试点平均分，再按子任务满分缩放
 
 [custom_modules]
 checker_path = "checker.cpp" # 仅当 checker_type = "Special" 时需要提供，路径相对于题目目录/data
 interactor_path = "interactor.cpp" # 仅当 checker_type = "Interactor" 时需要提供，路径相对于题目目录/data
 ```
+
+`min` 子任务的测试点得分降到 0 后，剩余点返回 `Skipped`，不再启动选手程序；正的部分分仍继续评测。
+`sum` 子任务和无子任务的逐点加权评测不会因某点失败而停止。
+`pre_subtasks` 中任一前置子任务未通过时，当前子任务全部跳过，该失败状态沿依赖链传播；无依赖的子任务照常评测。
+回归入口 `tests/rust_submission.py` 覆盖上述规则及 Skipped 的零资源、空输出字段。
 
 ### 针对交互题的额外说明
 

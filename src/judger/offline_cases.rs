@@ -42,6 +42,11 @@ pub(crate) async fn run_offline_cases(
                 .pre_subtasks
                 .iter()
                 .any(|pre_id| error_map.get(pre_id).copied().unwrap_or(false));
+            // A skipped prerequisite must also block its transitive dependents.
+            if have_error {
+                error_map.insert(sub_id, true);
+            }
+            let mut min_score_zero = false;
             let mut scores = Vec::new();
             for case_id in &subtask_config.cases {
                 let case_config = problem_config
@@ -55,10 +60,15 @@ pub(crate) async fn run_offline_cases(
                             format!("Test case with id {} not found in problem config", case_id),
                         )
                     })?;
-                if have_error {
+                if have_error || min_score_zero {
                     out_vec.push(JudgeResultItem {
                         id: case_config.id,
-                        sys: "Skipped due to previous error in subtask".to_string(),
+                        sys: if have_error {
+                            "Skipped due to failed prerequisite subtask"
+                        } else {
+                            "Skipped because min subtask score is already zero"
+                        }
+                        .to_string(),
                         r#type: JudgeResultType::Skipped,
                         ..Default::default()
                     });
@@ -75,6 +85,9 @@ pub(crate) async fn run_offline_cases(
                 )
                 .await?;
                 scores.push(res.score);
+                // Positive partial scores can still decrease; sum subtasks must
+                // evaluate every case. Only a zero minimum is final.
+                min_score_zero = subtask_config.r#type == "min" && res.score == 0;
                 out_vec.push(res.clone());
                 if res.r#type != JudgeResultType::Accepted {
                     error_map.insert(sub_id, true);
