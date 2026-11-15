@@ -197,6 +197,13 @@ input!{from &mut source,a:i64,b:i64}println!("{}",a+b);io::stdout().flush().unwr
     for language, code in (("Rust", rust_interactive), ("Cpp", cpp_interactive)):
         expect("interactive-" + language, code, language=language, pid="RUSTINTERACTIVE")
 
+    expect("interactive-early-eof", "int main(){return 0;}", "WrongAnswer",
+           language="Cpp", pid="RUSTINTERACTIVE")
+    expect("interactive-abort", '#include <iostream>\n#include <cstdlib>\nint main(){int a,b;std::cin>>a>>b;std::abort();}',
+           "RuntimeError", language="Cpp", pid="RUSTINTERACTIVE")
+    expect("interactive-wrong-answer", cpp_interactive.replace("a+b", "a-b"),
+           "WrongAnswer", language="Cpp", pid="RUSTINTERACTIVE")
+
     subtasks = copy.deepcopy(base)
     subtasks["subtasks"] = [{"id": 1, "cases": [1, 2], "score": 100, "type": "min", "pre_subtasks": []}]
     problem("RUSTSUBTASK", subtasks)

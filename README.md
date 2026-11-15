@@ -101,7 +101,11 @@ interactor_path = "interactor.cpp" # 仅当 checker_type = "Interactor" 时需�
 交互器的标准输入为用户程序的标准输出，标准输出为用户程序的标准输入。
 交互器的调用形式为 `./interactor <input_file> <output_file>`，其中 `<input_file>` 为 `{num}.in` 文件，
 `<output_file>` 为交互器与用户程序交互时的输出文件。
-交互器正常退出则认为AC，非正常退出则认为WA（错误信息取stderr）。
+选手正常退出且交互器正常退出才认为 AC；选手的 RE/TLE/MLE 保留原判定。
+选手正常退出、交互器拒绝答案时判 WA，即使 stderr 为空也不能误判 AC。
+交互器启动失败、testlib `_fail`（退出码 3）或自身异常崩溃属于评测错误。
+父进程及时关闭多余管道端，保证选手退出后交互器能收到 EOF；交互器退出等待受整场交互的实际时间上限约束。
+`tests/sandbox_interaction.rs` 覆盖 EOF、崩溃、诊断输出、双向关闭及超时；必须在隔离的 Linux root 容器中运行。
 交互器参考[Interactors with testlib.h](https://codeforces.com/blog/entry/18455)。
 
 ### 针对特殊检查器的额外说明
