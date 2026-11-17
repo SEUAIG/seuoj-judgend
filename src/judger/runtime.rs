@@ -17,6 +17,12 @@ pub(crate) struct ResourceLimits {
     pub(crate) memory_limit_kb: Option<i64>,
 }
 
+/// 判题时允许的选手输出上限（超过即视为输出超限），与内存限制脱钩。
+pub(crate) const MAX_OUTPUT_SIZE_BYTES: i64 = 64 * 1024 * 1024;
+
+/// 落盘保留的选手输出上限：详情页只看截断文本，完整输出无需留存。
+pub(crate) const MAX_STORED_OUTPUT_SIZE_BYTES: u64 = 1024 * 1024;
+
 pub(crate) fn build_run_config(
     base: &judger::Config,
     paths: RunPaths<'_>,
@@ -27,10 +33,11 @@ pub(crate) fn build_run_config(
         config.max_cpu_time = time_limit;
         config.max_real_time = time_limit * 2;
     }
+    // 输出上限与内存限制无关：题目没有单独配置内存限制时也必须生效。
+    config.max_output_size = MAX_OUTPUT_SIZE_BYTES;
     if let Some(memory_limit) = limits.memory_limit_kb {
         config.max_memory = memory_limit * 1024;
         config.max_stack = memory_limit * 1024;
-        config.max_output_size = memory_limit * 1024;
     }
     config.exe_path = paths.exec_path.to_string();
     config.args = paths.args.to_vec();

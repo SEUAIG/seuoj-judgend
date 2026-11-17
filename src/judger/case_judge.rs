@@ -6,7 +6,9 @@ use crate::fs::{get_path_by_pid_name, get_text_by_path};
 use crate::judger::checker::{self, CheckerResult};
 use crate::judger::judge_result::{JudgeResultItem, JudgeResultType};
 use crate::judger::judger_helpers::chmod_plus_x;
-use crate::judger::runtime::{ResourceLimits, RunPaths, build_run_config, run_with_interactor};
+use crate::judger::runtime::{
+    MAX_STORED_OUTPUT_SIZE_BYTES, ResourceLimits, RunPaths, build_run_config, run_with_interactor,
+};
 use crate::schema::{CheckerType, CustomModules, ProblemType, TestCaseConfig};
 use axum::http::StatusCode;
 use tracing::{info, warn};
@@ -50,7 +52,7 @@ pub(crate) async fn judge_single_case(
         "Judger result for test case {} of submission {}: {:?}",
         case_config.id, submission_id, res
     );
-    build_case_result(CaseResultContext {
+    let result = build_case_result(CaseResultContext {
         case_id: case_config.id,
         pid,
         submission_id,
@@ -61,7 +63,34 @@ pub(crate) async fn judge_single_case(
         ans_path: &ans_path,
         res,
     })
-    .await
+    .await?;
+    // 比对已完成，落盘输出只留前 1 MB，避免死循环程序把磁盘写爆。
+    truncate_stored_output(&config.output_path).await;
+    Ok(result)
+}
+
+/// 把已写入磁盘的选手输出截断到上限；失败只记录日志，不影响判题结论。
+async fn truncate_stored_output(path: &str) {
+    let path = std::path::Path::new(path);
+    let meta = match tokio::fs::metadata(path).await {
+        Ok(meta) => meta,
+        Err(_) => return,
+    };
+    if meta.len() <= MAX_STORED_OUTPUT_SIZE_BYTES {
+        return;
+    }
+    match tokio::fs::OpenOptions::new().write(true).open(path).await {
+        Ok(file) => match file.set_len(MAX_STORED_OUTPUT_SIZE_BYTES).await {
+            Ok(()) => info!(
+                "Truncated stored output {} from {} to {} bytes",
+                path.display(),
+                meta.len(),
+                MAX_STORED_OUTPUT_SIZE_BYTES
+            ),
+            Err(error) => warn!("Failed to truncate {}: {}", path.display(), error),
+        },
+        Err(error) => warn!("Failed to open {} for truncation: {}", path.display(), error),
+    }
 }
 
 async fn resolve_case_paths(

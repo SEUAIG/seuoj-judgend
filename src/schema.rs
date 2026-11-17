@@ -181,7 +181,7 @@ impl ProblemInfo {
             max_memory: self.memory_limit_kb * 1024,
             max_stack: self.memory_limit_kb * 1024,
             max_process_number: 1,
-            max_output_size: self.memory_limit_kb * 1024,
+            max_output_size: crate::judger::runtime::MAX_OUTPUT_SIZE_BYTES,
             ..Default::default()
         }
     }
